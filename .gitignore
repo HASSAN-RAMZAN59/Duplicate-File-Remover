@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+android/build/
+android/app/debug/
+android/app/release/
+*.apk
+*.aab
+*.keystore
+!android/app/debug.keystore
+
+# iOS build outputs
+ios/Pods/
+ios/build/
+*.xcworkspace
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
