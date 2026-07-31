@@ -1,16 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { usePermissions } from '../hooks/usePermissions';
-import { PermissionCard } from '../components/common/PermissionCard';
-import { Button } from '../components/common/Button';
 import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
 import { storageService } from '../services/storageService';
 
 export const PermissionScreen = ({ navigation }) => {
   const {
-    storageStatus,
-    contactsStatus,
+    isStorageGranted,
+    isContactsGranted,
     areAllPermissionsGranted,
     requestStorage,
     requestContacts,
@@ -35,50 +33,45 @@ export const PermissionScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerBadge}>STEP 1 OF 2</Text>
-          <Text style={styles.title}>Required Permissions</Text>
-          <Text style={styles.subtitle}>
-            To detect and clean duplicate files across your device, please grant the following permissions.
+      <View style={styles.container}>
+        <Text style={styles.title}>Permission Screen</Text>
+
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.button, isStorageGranted && styles.buttonGranted]}
+            onPress={requestStorage}
+            disabled={isStorageGranted}
+          >
+            <Text style={styles.buttonText}>
+              {isStorageGranted ? '✓ Storage Permission Granted' : 'Grant Storage Permission'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, isContactsGranted && styles.buttonGranted]}
+            onPress={requestContacts}
+            disabled={isContactsGranted}
+          >
+            <Text style={styles.buttonText}>
+              {isContactsGranted ? '✓ Contacts Permission Granted' : 'Grant Contacts Permission'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.secondaryButton} onPress={openSettings}>
+            <Text style={styles.secondaryButtonText}>Open Device Settings</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.continueButton, !areAllPermissionsGranted && styles.disabledButton]}
+          disabled={!areAllPermissionsGranted}
+          onPress={handleContinue}
+        >
+          <Text style={styles.continueButtonText}>
+            {areAllPermissionsGranted ? 'Continue to Home' : 'Grant All Permissions to Continue'}
           </Text>
-        </View>
-
-        <View style={styles.cardsContainer}>
-          <PermissionCard
-            title="Storage & Media Access"
-            subtitle="Android MediaStore / iOS Photo Library"
-            description="Required to scan device storage for duplicate photos, videos, audio tracks, and documents."
-            icon="📁"
-            status={storageStatus}
-            onRequestPermission={requestStorage}
-            onOpenSettings={openSettings}
-          />
-
-          <PermissionCard
-            title="Contacts Access"
-            subtitle="Android & iOS Address Book"
-            description="Required to identify duplicate contacts with identical names or matching telephone numbers."
-            icon="📇"
-            status={contactsStatus}
-            onRequestPermission={requestContacts}
-            onOpenSettings={openSettings}
-          />
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.privacyNote}>
-            🔒 Your privacy is fully protected. Files and contacts are scanned strictly on-device and are never uploaded anywhere.
-          </Text>
-          <Button
-            title={areAllPermissionsGranted ? 'Continue to App' : 'Grant Permissions to Continue'}
-            variant="primary"
-            disabled={!areAllPermissionsGranted}
-            onPress={handleContinue}
-            style={styles.continueButton}
-          />
-        </View>
-      </ScrollView>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -86,50 +79,69 @@ export const PermissionScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.background || '#0A0F1D',
   },
   container: {
+    flex: 1,
     padding: 24,
-    flexGrow: 1,
-    justifyContent: 'space-between',
-  },
-  header: {
-    marginBottom: 24,
-    marginTop: 12,
-  },
-  headerBadge: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.secondary,
-    letterSpacing: 1.2,
-    marginBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    lineHeight: 22,
-  },
-  cardsContainer: {
-    flex: 1,
-  },
-  footer: {
-    marginTop: 16,
-  },
-  privacyNote: {
-    fontSize: 12,
-    color: COLORS.textMuted,
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary || '#FFFFFF',
+    marginBottom: 36,
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 18,
+  },
+  buttonContainer: {
+    width: '100%',
+    marginBottom: 36,
+  },
+  button: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  buttonGranted: {
+    backgroundColor: '#10B981', // Green background when granted
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  secondaryButtonText: {
+    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '600',
   },
   continueButton: {
+    backgroundColor: '#3B82F6',
     width: '100%',
     paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#374151',
+    opacity: 0.6,
+  },
+  continueButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

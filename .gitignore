@@ -12,6 +12,9 @@ android/app/release/
 *.keystore
 !android/app/debug.keystore
 .agents
+.agent
+.gemini
+.env
 
 # iOS build outputs
 ios/Pods/
