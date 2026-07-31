@@ -11,6 +11,7 @@ android/app/release/
 *.aab
 *.keystore
 !android/app/debug.keystore
+.agents
 
 # iOS build outputs
 ios/Pods/
