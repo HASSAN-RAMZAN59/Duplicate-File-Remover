@@ -1,10 +1,11 @@
 apply plugin: "com.android.application"
-apply plugin: "com.facebook.react"
 
-react {
-    /* Folders & entry point */
-    entryFile = file("../App.js")
-}
+project.ext.react = [
+    enableHermes: true,
+    entryFile: "index.js"
+]
+
+apply from: "../../node_modules/react-native/react.gradle"
 
 android {
     ndkVersion rootProject.ext.ndkVersion
