@@ -26,7 +26,7 @@ export const PermissionScreen = ({ navigation }) => {
     } else {
       navigation.reset({
         index: 0,
-        routes: [{ name: ROUTES.HOME }],
+        routes: [{ name: ROUTES.MAIN_DRAWER }],
       });
     }
   };

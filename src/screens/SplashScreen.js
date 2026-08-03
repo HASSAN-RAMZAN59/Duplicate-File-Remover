@@ -39,7 +39,7 @@ export const SplashScreen = ({ navigation }) => {
           // Route 3: Permissions granted and onboarding completed
           navigation.reset({
             index: 0,
-            routes: [{ name: ROUTES.HOME }],
+            routes: [{ name: ROUTES.MAIN_DRAWER }],
           });
         }
       }, remainingTime);

@@ -23,7 +23,6 @@ export const AppNavigator = () => {
         <Stack.Screen name={ROUTES.SPLASH} component={SplashScreen} />
         <Stack.Screen name={ROUTES.PERMISSIONS} component={PermissionScreen} />
         <Stack.Screen name={ROUTES.ONBOARDING} component={OnboardingScreen} />
-        <Stack.Screen name={ROUTES.HOME} component={MainDrawerNavigator} />
         <Stack.Screen name={ROUTES.MAIN_DRAWER} component={MainDrawerNavigator} />
       </Stack.Navigator>
     </NavigationContainer>

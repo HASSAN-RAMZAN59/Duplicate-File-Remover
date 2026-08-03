@@ -1,15 +1,18 @@
 import React from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
+import { StatusBar, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { COLORS } from './src/constants/colors';
 
 export default function App() {
   return (
-    <SafeAreaProvider style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      <AppNavigator />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaProvider style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+        <AppNavigator />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -19,3 +22,4 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 });
+

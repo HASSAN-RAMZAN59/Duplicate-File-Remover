@@ -33,7 +33,7 @@ export const OnboardingScreen = ({ navigation }) => {
     await storageService.setOnboardingCompleted();
     navigation.reset({
       index: 0,
-      routes: [{ name: ROUTES.HOME }],
+      routes: [{ name: ROUTES.MAIN_DRAWER }],
     });
   };
 
