@@ -3,7 +3,7 @@ import { formatBytes } from './hashEngine';
 
 /**
  * 1. Safely deletes a batch of selected duplicate files from physical device storage.
- * Strips URI schemes (file://) and refreshes Android MediaStore gallery database.
+ * Follows multi-Android version MediaStore deletion policies (Android 6 - Android 15).
  * 
  * @param {Array<Object|string>} filesOrPaths Array of file objects OR file path strings
  * @returns {Promise<Object>} { success: boolean, deletedCount: number, freedBytes: number, freedFormatted: string, errors: Array }
@@ -22,6 +22,7 @@ export const deleteSelectedFiles = async (filesOrPaths = []) => {
   let deletedCount = 0;
   let freedBytes = 0;
   const errors = [];
+  const NativeFileDeleter = NativeModules.NativeFileDeleter;
   const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
 
   for (const item of filesOrPaths) {
@@ -30,28 +31,54 @@ export const deleteSelectedFiles = async (filesOrPaths = []) => {
 
     if (!rawPath) continue;
 
-    // Clean file:// scheme prefix for raw Java File path
-    const cleanPath = rawPath.startsWith('file://')
-      ? rawPath.replace('file://', '')
-      : rawPath;
-
+    let cleanPath = rawPath;
+    if (cleanPath.startsWith('file://')) {
+      cleanPath = cleanPath.substring(7);
+    }
     try {
-      if (RNFS && typeof RNFS.unlink === 'function') {
-        await RNFS.unlink(cleanPath);
-        console.log('[FileDeleter] Successfully unlinked raw path from physical storage:', cleanPath);
+      cleanPath = decodeURIComponent(cleanPath);
+    } catch (e) {}
 
-        // Notify MediaStore to update system gallery database
-        if (typeof RNFS.scanFile === 'function') {
-          try {
-            await RNFS.scanFile(cleanPath);
-          } catch (e) {}
-        }
-        deletedCount += 1;
-        freedBytes += size;
+    let isDeleted = false;
+
+    // Primary Execution: Multi-Android Native MediaStore Deletion Module
+    try {
+      if (NativeFileDeleter && typeof NativeFileDeleter.deleteFileNative === 'function') {
+        isDeleted = await NativeFileDeleter.deleteFileNative(cleanPath);
       }
-    } catch (error) {
-      console.warn('[FileDeleter] Failed to delete file from device:', cleanPath, error);
-      errors.push({ path: cleanPath, error: error.message });
+    } catch (nativeErr) {
+      console.warn('[FileDeleter] NativeFileDeleter error:', nativeErr);
+    }
+
+    // Fallback Execution: RNFS unlink & scanFile
+    if (!isDeleted && RNFS) {
+      try {
+        if (typeof RNFS.unlink === 'function') {
+          await RNFS.unlink(cleanPath);
+        }
+        if (typeof RNFS.scanFile === 'function') {
+          await RNFS.scanFile(cleanPath);
+        }
+      } catch (rnfsErr) {
+        console.warn('[FileDeleter] RNFS fallback error:', rnfsErr);
+      }
+    }
+
+    // Rescan Verification: Confirm if file exists on disk
+    let stillExists = true;
+    try {
+      if (RNFS && typeof RNFS.exists === 'function') {
+        stillExists = await RNFS.exists(cleanPath);
+      }
+    } catch (e) {}
+
+    console.log(`[FileDeleter] Rescan Verification for ${cleanPath}: stillExists = ${stillExists}`);
+
+    if (!stillExists || isDeleted) {
+      deletedCount += 1;
+      freedBytes += size;
+    } else {
+      errors.push({ path: cleanPath, error: 'File still exists on disk after deletion attempt' });
     }
   }
 

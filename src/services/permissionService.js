@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import {
   check,
   request,
@@ -42,19 +42,50 @@ const isGrantedOrLimited = (res) =>
 
 export const permissionService = {
   /**
+   * Checks if Android 11+ (API 30+) All Files Access is active.
+   */
+  checkAllFilesAccess: async () => {
+    if (Platform.OS === 'android' && Platform.Version >= 30) {
+      try {
+        const NativeFileDeleter = NativeModules.NativeFileDeleter;
+        if (NativeFileDeleter && typeof NativeFileDeleter.isAllFilesPermissionGranted === 'function') {
+          return await NativeFileDeleter.isAllFilesPermissionGranted();
+        }
+      } catch (e) {}
+    }
+    return true;
+  },
+
+  /**
+   * Opens Android All Files Access settings page.
+   */
+  requestAllFilesAccess: async () => {
+    if (Platform.OS === 'android' && Platform.Version >= 30) {
+      try {
+        const NativeFileDeleter = NativeModules.NativeFileDeleter;
+        if (NativeFileDeleter && typeof NativeFileDeleter.requestAllFilesPermission === 'function') {
+          return await NativeFileDeleter.requestAllFilesPermission();
+        }
+      } catch (e) {}
+    }
+    return true;
+  },
+
+  /**
    * Check status of storage permission with full Old & New Android version support.
-   * Android 13+ (API 33+): READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO
-   * Android 6 - 12 (API <= 32): READ_EXTERNAL_STORAGE
+   * Android 11+ (API 30+): MANAGE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO
+   * Android 6 - 10 (API <= 29): READ_EXTERNAL_STORAGE
    */
   checkPermission: async (type) => {
     try {
       if (type === PERMISSION_TYPES.STORAGE) {
         if (Platform.OS === 'android') {
           if (Platform.Version >= 33) {
-            const [imgRes, vidRes, audRes, legacyRes] = await Promise.all([
+            const [imgRes, vidRes, audRes, manageRes, legacyRes] = await Promise.all([
               check(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES),
               check(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO),
               check(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO),
+              check(PERMISSIONS.ANDROID.MANAGE_EXTERNAL_STORAGE),
               check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE),
             ]);
 
@@ -62,11 +93,22 @@ export const permissionService = {
               isGrantedOrLimited(imgRes) ||
               isGrantedOrLimited(vidRes) ||
               isGrantedOrLimited(audRes) ||
+              isGrantedOrLimited(manageRes) ||
               isGrantedOrLimited(legacyRes);
 
             return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+          } else if (Platform.Version >= 30) {
+            const [manageRes, legacyRes] = await Promise.all([
+              check(PERMISSIONS.ANDROID.MANAGE_EXTERNAL_STORAGE),
+              check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE),
+            ]);
+
+            const isAnyGranted =
+              isGrantedOrLimited(manageRes) || isGrantedOrLimited(legacyRes);
+
+            return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
           } else {
-            // Legacy Android 6 to 12 (API <= 32)
+            // Legacy Android 6 to 10 (API <= 29)
             const res = await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
             return normalizeStatus(res);
           }
@@ -108,14 +150,28 @@ export const permissionService = {
               request(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO),
             ]);
 
+            // Request All Files Access page if not granted on Android 11+
+            const isAllFilesOk = await permissionService.checkAllFilesAccess();
+            if (!isAllFilesOk) {
+              await permissionService.requestAllFilesAccess();
+            }
+
             const isAnyGranted =
               isGrantedOrLimited(imgRes) ||
               isGrantedOrLimited(vidRes) ||
               isGrantedOrLimited(audRes);
 
             return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+          } else if (Platform.Version >= 30) {
+            // Android 11, 12 (API 30-32)
+            const isAllFilesOk = await permissionService.checkAllFilesAccess();
+            if (!isAllFilesOk) {
+              await permissionService.requestAllFilesAccess();
+            }
+            const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+            return normalizeStatus(res);
           } else {
-            // Legacy Android 6 to 12 (API <= 32)
+            // Legacy Android 6 to 10 (API <= 29)
             const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
             return normalizeStatus(res);
           }

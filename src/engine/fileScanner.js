@@ -136,10 +136,18 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
         if (isFile) {
           const ext = getExtension(item.name);
           if (extList.length === 0 || extList.includes(ext)) {
-            const rawPath = item.path || '';
+            let rawPath = item.path || '';
+            if (rawPath.startsWith('file://')) {
+              rawPath = rawPath.substring(7);
+            }
+            try {
+              rawPath = decodeURIComponent(rawPath);
+            } catch (e) {}
+
             const filePath = rawPath.startsWith('/sdcard/')
               ? rawPath.replace('/sdcard/', '/storage/emulated/0/')
               : rawPath;
+
             const fileSize = Number(item.size || 0);
 
             // Avoid duplicate scan entries for same file path
@@ -215,7 +223,7 @@ export const scanOthersCategory = async () => {
 
 /**
  * Deletes a file from physical device storage.
- * Strips URI prefixes and notifies Android MediaStore to refresh.
+ * Uses custom NativeFileDeleter (ContentResolver + File.delete) for guaranteed deletion across Android 6-15.
  * 
  * @param {string} filePath 
  * @returns {Promise<boolean>}
@@ -223,27 +231,50 @@ export const scanOthersCategory = async () => {
 export const deleteFileFromDevice = async (filePath) => {
   if (!filePath) return false;
 
-  // Clean file:// scheme prefix for raw Java File path
-  const cleanPath = filePath.startsWith('file://')
-    ? filePath.replace('file://', '')
-    : filePath;
+  // 1. Primary Native Android Deletion via MediaStore ContentResolver & File.delete
+  try {
+    const NativeFileDeleter = NativeModules.NativeFileDeleter;
+    if (NativeFileDeleter && typeof NativeFileDeleter.deleteFileNative === 'function') {
+      const isDeleted = await NativeFileDeleter.deleteFileNative(filePath);
+      console.log('[FileScanner] NativeFileDeleter result for:', filePath, '=>', isDeleted);
+      if (isDeleted) return true;
+    }
+  } catch (nativeErr) {
+    console.warn('[FileScanner] NativeFileDeleter warning:', nativeErr);
+  }
+
+  // 2. Fallback to RNFS unlink & scanFile
+  let cleanPath = filePath;
+  if (cleanPath.startsWith('file://')) {
+    cleanPath = cleanPath.substring(7);
+  }
+  try {
+    cleanPath = decodeURIComponent(cleanPath);
+  } catch (e) {}
 
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
-    if (RNFS && typeof RNFS.unlink === 'function') {
-      await RNFS.unlink(cleanPath);
-      console.log('[FileScanner] Successfully deleted file from storage:', cleanPath);
+    if (RNFS) {
+      if (typeof RNFS.unlink === 'function') {
+        try {
+          await RNFS.unlink(cleanPath);
+        } catch (unlinkErr) {}
+      }
 
-      // Refresh Android MediaStore Database so video disappears from Gallery
       if (typeof RNFS.scanFile === 'function') {
         try {
           await RNFS.scanFile(cleanPath);
         } catch (scanErr) {}
       }
+
+      if (typeof RNFS.exists === 'function') {
+        const stillExists = await RNFS.exists(cleanPath);
+        return !stillExists;
+      }
       return true;
     }
   } catch (error) {
-    console.warn('[FileScanner] Could not unlink file from storage:', cleanPath, error);
+    console.error('[FileScanner] RNFS delete error for:', cleanPath, error);
     return false;
   }
   return false;
