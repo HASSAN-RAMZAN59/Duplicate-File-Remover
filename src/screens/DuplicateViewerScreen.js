@@ -10,9 +10,10 @@ import {
   Alert,
 } from 'react-native';
 import { COLORS } from '../constants/colors';
-import { scanCategoryFiles, deleteFileFromDevice } from '../engine/fileScanner';
+import { scanCategoryFiles } from '../engine/fileScanner';
 import { scanContactDuplicates } from '../engine/contactScanner';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
+import { deleteBatch } from '../engine/fileDeleter';
 
 export const DuplicateViewerScreen = ({ route, navigation }) => {
   const { categoryType = 'Images' } = route.params || {};
@@ -100,7 +101,6 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     setDuplicateGroups((prevGroups) =>
       prevGroups.map((group) => {
         if (group.groupId !== groupId) return group;
-        // If all duplicates in group are selected, deselect them; otherwise select all non-original duplicates
         const allDuplicatesSelected = group.files
           .filter((f) => !f.isOriginal)
           .every((f) => f.selected);
@@ -134,27 +134,26 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           onPress: async () => {
             setIsDeleting(true);
 
-            // Collect files to delete
-            const filesToDelete = [];
+            // Collect selected items to delete
+            const selectedItems = [];
             duplicateGroups.forEach((group) => {
               group.files.forEach((file) => {
                 if (file.selected) {
-                  filesToDelete.push(file);
+                  selectedItems.push(file);
                 }
               });
             });
 
-            // Perform file removal via scanner engine
-            for (const file of filesToDelete) {
-              await deleteFileFromDevice(file.path);
-            }
+            // Perform file/contact deletion via fileDeleter engine
+            const deleteResult = await deleteBatch(selectedItems);
 
-            // Update local state by stripping deleted files
+            // Automatically refresh local list by removing deleted items
             setDuplicateGroups((prevGroups) => {
               const updatedGroups = prevGroups
                 .map((group) => ({
                   ...group,
                   files: group.files.filter((file) => !file.selected),
+                  fileCount: group.files.filter((file) => !file.selected).length,
                 }))
                 .filter((group) => group.files.length > 1); // Discard groups with only 1 file remaining
 
@@ -164,7 +163,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
             setIsDeleting(false);
             Alert.alert(
               'Cleanup Complete 🎉',
-              `Successfully removed ${selectionSummary.count} duplicate item(s) and freed ${selectionSummary.formattedSize} of storage!`
+              `Successfully removed ${deleteResult.deletedCount} duplicate item(s) and freed ${deleteResult.freedFormatted} of storage!`
             );
           },
         },
