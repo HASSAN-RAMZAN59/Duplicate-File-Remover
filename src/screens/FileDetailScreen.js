@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import FileViewer from 'react-native-file-viewer';
 import RNShare from 'react-native-share';
-import { COLORS } from '../constants/colors';
 import { formatBytes } from '../engine/hashEngine';
 import { deleteFileFromDevice } from '../engine/fileScanner';
 
@@ -284,7 +283,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#000000',
-    justify.content: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
@@ -293,7 +292,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   fallbackIconWrapper: {
-    justify.content: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   fallbackIcon: {
@@ -353,7 +352,7 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 27,
     backgroundColor: '#38BDF8',
-    justify.content: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
     shadowColor: '#38BDF8',
@@ -382,7 +381,7 @@ const styles = StyleSheet.create({
     borderColor: '#38BDF8',
     backgroundColor: '#F8FAFC',
     overflow: 'hidden',
-    justify.content: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   largePreviewImage: {
