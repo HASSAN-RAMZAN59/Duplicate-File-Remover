@@ -16,7 +16,7 @@ import { formatBytes } from '../engine/hashEngine';
 import { deleteFileFromDevice } from '../engine/fileScanner';
 
 export const FileDetailScreen = ({ route, navigation }) => {
-  const { file = {} } = route.params || {};
+  const { file = {}, onFileDeleted } = route.params || {};
   const [isDeleting, setIsDeleting] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
 
@@ -105,6 +105,9 @@ export const FileDetailScreen = ({ route, navigation }) => {
             setIsDeleting(false);
 
             if (success) {
+              if (typeof onFileDeleted === 'function') {
+                onFileDeleted(file.path);
+              }
               Alert.alert('File Deleted 🎉', 'The selected file has been removed from your device.', [
                 {
                   text: 'OK',
