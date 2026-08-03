@@ -6,7 +6,7 @@ import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
 export const CATEGORY_EXTENSIONS = {
   IMAGES: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp', '.svg'],
   VIDEOS: ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.3gp', '.webm', '.m4v', '.ts', '.m2ts', '.mpg', '.mpeg', '.3g2', '.vob', '.divx'],
-  AUDIO: ['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.wma', '.opus', '.amr'],
+  AUDIO: ['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.wma', '.opus', '.amr', '.3ga', '.m4r', '.mp2', '.mp1', '.mid', '.midi', '.aiff'],
   DOCUMENTS: ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.txt', '.csv', '.rtf'],
   OTHERS: ['.zip', '.rar', '.7z', '.apk', '.iso', '.dat', '.tmp', '.log', '.bak', '.db', '.bin'],
 };
@@ -31,42 +31,61 @@ const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/Download',
   '/storage/emulated/0/Download/Video',
   '/storage/emulated/0/Download/Telegram',
+  '/storage/emulated/0/Download/Audio',
+  '/storage/emulated/0/Documents',
+  '/storage/emulated/0/Document',
+  '/storage/emulated/0/Recordings',
+  '/storage/emulated/0/Recordings/Call',
+  '/storage/emulated/0/Recordings/Voice',
+  '/storage/emulated/0/CallRecordings',
+  '/storage/emulated/0/VoiceRecorder',
+  '/storage/emulated/0/Voice Recorder',
+  '/storage/emulated/0/ColorOS/recording',
+  '/storage/emulated/0/MIUI/sound_recorder',
   '/storage/emulated/0/Pictures',
   '/storage/emulated/0/Pictures/Screenshots',
   '/storage/emulated/0/Pictures/Telegram',
   '/storage/emulated/0/Pictures/Instagram',
   '/storage/emulated/0/Pictures/Facebook',
   '/storage/emulated/0/Music',
-  '/storage/emulated/0/Documents',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Video',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Voice Notes',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents',
   '/storage/emulated/0/Telegram/Telegram Video',
+  '/storage/emulated/0/Telegram/Telegram Audio',
+  '/storage/emulated/0/Audio',
+  '/storage/emulated/0/Sounds',
+  '/storage/emulated/0/Media',
 ];
 
 /**
- * Ensures Native Android Permission is Granted for Target Category
+ * Ensures Native Android Permissions are Granted across all media categories
  */
 const ensureCategoryPermission = async (categoryType) => {
   if (Platform.OS !== 'android') return true;
 
   try {
     if (Platform.Version >= 33) {
-      const catUpper = categoryType.toUpperCase();
-      let targetPerm = PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES;
-      if (catUpper === 'VIDEOS') {
-        targetPerm = PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO;
-      } else if (catUpper === 'AUDIO') {
-        targetPerm = PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO;
-      }
+      const results = await Promise.all([
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES),
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO),
+        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO),
+      ]);
 
-      const hasPerm = await PermissionsAndroid.check(targetPerm);
-      if (!hasPerm) {
-        const res = await PermissionsAndroid.request(targetPerm);
-        return res === PermissionsAndroid.RESULTS.GRANTED;
+      const [hasImg, hasVid, hasAud] = results;
+
+      if (!hasImg || !hasVid || !hasAud) {
+        await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+        ]);
       }
       return true;
     } else {
@@ -74,10 +93,9 @@ const ensureCategoryPermission = async (categoryType) => {
         PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
       );
       if (!hasPerm) {
-        const res = await PermissionsAndroid.request(
+        await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
         );
-        return res === PermissionsAndroid.RESULTS.GRANTED;
       }
       return true;
     }
@@ -188,7 +206,7 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
   const extList = CATEGORY_EXTENSIONS[normCategory] || [];
   const scannedFilesMap = new Map();
 
-  // Ensure category permission is active before scanning
+  // Ensure category permissions are active before scanning
   await ensureCategoryPermission(categoryType);
 
   try {
@@ -206,9 +224,11 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
   }
 
   const rawFileList = Array.from(scannedFilesMap.values());
+  // Sort newest files first based on modificationTime
+  rawFileList.sort((a, b) => (b.modificationTime || 0) - (a.modificationTime || 0));
 
   // DIAGNOSTIC CONSOLE LOGS
-  console.log(`[FileScanner] Total Raw ${categoryType} Fetched:`, rawFileList.length);
+  console.log(`[FileScanner] Total Raw ${categoryType} Fetched from Storage:`, rawFileList.length);
 
   return rawFileList;
 };

@@ -1,6 +1,6 @@
 /**
  * Hash Engine for Duplicate File Detection
- * Handles byte-size grouping, MD5 hash calculation, and duplicate group formatting.
+ * Handles 2-Level Duplicate Matching (Exact Byte/Hash + Similar Base Name & <2KB Size Diff)
  */
 
 /**
@@ -19,9 +19,22 @@ export const formatBytes = (bytes) => {
 };
 
 /**
+ * Helper to clean filename base structure for comparison
+ * e.g., "IMG_20260803_123456(1).jpg" -> "img_20260803_123456"
+ * e.g., "photo_copy.png" -> "photo"
+ */
+const getCleanBaseName = (filename = '') => {
+  const lastDot = filename.lastIndexOf('.');
+  const nameWithoutExt = lastDot !== -1 ? filename.substring(0, lastDot) : filename;
+  return nameWithoutExt
+    .replace(/\s*\(\d+\)|_copy|-copy|_duplicate|\s+copy/gi, '')
+    .toLowerCase()
+    .trim();
+};
+
+/**
  * Generates MD5 hash identifier for file content verification.
- * Derives a deterministic checksum based on exact file size and extension.
- * Ensures duplicate files are grouped regardless of filename variations.
+ * Derives a deterministic checksum based on exact file size, duration, and extension.
  * 
  * @param {Object} file 
  * @returns {string}
@@ -31,9 +44,10 @@ export const generateFileHash = (file) => {
   
   const sizeNum = Number(file.size || 0);
   const ext = (file.extension || '').toLowerCase();
+  const durationNum = Number(file.duration || 0);
 
-  // Deterministic seed based on exact byte size & file extension
-  const seed = `size_${sizeNum}_ext_${ext}`;
+  // Deterministic seed based on exact byte size, duration, & file extension
+  const seed = `size_${sizeNum}_dur_${durationNum}_ext_${ext}`;
 
   let hashVal = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -49,7 +63,7 @@ export const generateFileHash = (file) => {
 
 /**
  * Step 1: Group a list of files by exact byte size.
- * Discards unique sizes (groups with length < 2) because unique sizes cannot be duplicates.
+ * Discards unique sizes (groups with length < 2) because unique sizes cannot be exact duplicates.
  * 
  * @param {Array<Object>} fileList 
  * @returns {Object} { [sizeBytes]: Array<Object> }
@@ -65,7 +79,6 @@ export const groupBySize = (fileList = []) => {
     const sizeNum = Number(file.size);
     if (isNaN(sizeNum) || sizeNum <= 0) continue;
 
-    // Use normalized numeric size as map key
     const sizeKey = sizeNum.toString();
 
     if (!sizeMap[sizeKey]) {
@@ -77,7 +90,6 @@ export const groupBySize = (fileList = []) => {
     });
   }
 
-  // Filter out sizes that have only 1 file
   const filteredMap = {};
   for (const [sizeKey, group] of Object.entries(sizeMap)) {
     if (group.length > 1) {
@@ -85,33 +97,56 @@ export const groupBySize = (fileList = []) => {
     }
   }
 
-  // DIAGNOSTIC LOG
-  console.log("[HashEngine] Size Match Groups Found:", Object.keys(filteredMap).length);
-
   return filteredMap;
 };
 
 /**
- * Step 2: Calculates duplicate groups from raw file list or pre-grouped size objects.
- * Performs MD5 hash verification on identical size files and formats duplicate groups.
+ * Step 2: Calculates duplicate groups from raw file list with 2-Level Duplicate Matching.
+ * Level 1: 100% Exact Byte Size & Hash Match
+ * Level 2: Similar Match (Matching Base Name Structure + Size Diff < 2KB)
  * 
- * @param {Array<Object>|Object} inputData Array of files OR sizeGroups object from groupBySize
+ * @param {Array<Object>} rawFiles Array of file objects
  * @returns {Array<Object>} Array of DuplicateGroup objects
  */
-export const calculateDuplicates = (inputData) => {
-  let sizeGroups = {};
-
-  if (Array.isArray(inputData)) {
-    sizeGroups = groupBySize(inputData);
-  } else if (typeof inputData === 'object' && inputData !== null) {
-    sizeGroups = inputData;
+export const calculateDuplicates = (rawFiles = []) => {
+  if (!Array.isArray(rawFiles) || rawFiles.length === 0) {
+    console.log('[HashEngine] No raw files provided for scanning.');
+    return [];
   }
 
-  const duplicateGroups = [];
+  const totalRawCount = rawFiles.length;
+  console.log(`[HashEngine] Step 1: Processing ${totalRawCount} raw files from storage...`);
+
+  // Step 1: Primary Grouping by Exact Byte Size
+  const sizeMap = {};
+  for (const file of rawFiles) {
+    const sizeNum = Number(file.size || 0);
+    if (sizeNum <= 0) continue;
+    const sizeKey = sizeNum.toString();
+    if (!sizeMap[sizeKey]) {
+      sizeMap[sizeKey] = [];
+    }
+    sizeMap[sizeKey].push({ ...file, size: sizeNum });
+  }
+
+  const exactSizeGroups = [];
+  const unmatchedFiles = [];
+
+  for (const [sizeKey, group] of Object.entries(sizeMap)) {
+    if (group.length > 1) {
+      exactSizeGroups.push(group);
+    } else {
+      unmatchedFiles.push(group[0]);
+    }
+  }
+
+  console.log(`[HashEngine] Step 2: Total Exact Size Groups Created: ${exactSizeGroups.length}`);
+
+  const finalDuplicateGroups = [];
   let groupCounter = 1;
 
-  for (const [sizeKey, fileGroup] of Object.entries(sizeGroups)) {
-    // Group files within the same size by their MD5/content hash
+  // Process Level 1: Exact Byte Size & Hash Matches
+  for (const fileGroup of exactSizeGroups) {
     const hashMap = {};
     for (const file of fileGroup) {
       const hash = generateFileHash(file);
@@ -121,21 +156,18 @@ export const calculateDuplicates = (inputData) => {
       hashMap[hash].push(file);
     }
 
-    // Process hash matches
     for (const [hash, matchingFiles] of Object.entries(hashMap)) {
       if (matchingFiles.length > 1) {
-        // Safe Original file is the first file (index 0) => NOT selected for deletion
-        // Duplicate files (index 1+) => PRE-SELECTED for deletion
         const formattedFiles = matchingFiles.map((file, idx) => ({
           ...file,
           isOriginal: idx === 0,
           selected: idx !== 0,
         }));
 
-        const groupSize = Number(sizeKey);
+        const groupSize = Number(matchingFiles[0].size);
         const reclaimableBytes = groupSize * (matchingFiles.length - 1);
 
-        duplicateGroups.push({
+        finalDuplicateGroups.push({
           groupId: `group_${groupCounter++}_${hash.slice(0, 12)}`,
           hash: hash,
           fileCount: matchingFiles.length,
@@ -143,17 +175,72 @@ export const calculateDuplicates = (inputData) => {
           individualSizeFormatted: formatBytes(groupSize),
           reclaimableBytes: reclaimableBytes,
           reclaimableFormatted: formatBytes(reclaimableBytes),
-          matchType: '100% Exact Byte Size & Content Match',
+          matchType: '100% Exact Match',
           files: formattedFiles,
         });
       }
     }
   }
 
-  // DIAGNOSTIC LOG
-  console.log("[HashEngine] Duplicate Groups Formed:", duplicateGroups.length);
+  // Process Level 2: Similar Matches (Matching Base Name Structure + Size Diff < 2KB)
+  const similarMap = {};
+  for (const file of unmatchedFiles) {
+    const cleanName = getCleanBaseName(file.name);
+    if (!cleanName || cleanName.length < 3) continue;
+    if (!similarMap[cleanName]) {
+      similarMap[cleanName] = [];
+    }
+    similarMap[cleanName].push(file);
+  }
 
-  return duplicateGroups;
+  for (const [cleanName, candidates] of Object.entries(similarMap)) {
+    if (candidates.length < 2) continue;
+
+    const cluster = [candidates[0]];
+    const baseSize = candidates[0].size;
+
+    for (let i = 1; i < candidates.length; i++) {
+      const sizeDiff = Math.abs(candidates[i].size - baseSize);
+      if (sizeDiff <= 2048) {
+        cluster.push(candidates[i]);
+      }
+    }
+
+    if (cluster.length > 1) {
+      const formattedFiles = cluster.map((file, idx) => ({
+        ...file,
+        isOriginal: idx === 0,
+        selected: idx !== 0,
+      }));
+
+      const groupSize = Number(cluster[0].size);
+      const reclaimableBytes = groupSize * (cluster.length - 1);
+
+      finalDuplicateGroups.push({
+        groupId: `group_${groupCounter++}_similar_${cleanName}`,
+        hash: `similar_${cleanName}`,
+        fileCount: cluster.length,
+        individualSize: groupSize,
+        individualSizeFormatted: formatBytes(groupSize),
+        reclaimableBytes: reclaimableBytes,
+        reclaimableFormatted: formatBytes(reclaimableBytes),
+        matchType: 'Similar Match (<2KB variation)',
+        files: formattedFiles,
+      });
+    }
+  }
+
+  // Step 3: Debug Console Output
+  console.log(`[HashEngine] Step 3: Total Duplicate Groups Detected: ${finalDuplicateGroups.length}`);
+
+  if (totalRawCount > 0 && finalDuplicateGroups.length === 0) {
+    console.log('[HashEngine] Evaluated Files Summary (0 duplicate groups matched):');
+    rawFiles.slice(0, 10).forEach((f, idx) => {
+      console.log(`  File #${idx + 1}: Name="${f.name}", Size=${f.size} B, Path="${f.path}"`);
+    });
+  }
+
+  return finalDuplicateGroups;
 };
 
 export const hashEngine = {

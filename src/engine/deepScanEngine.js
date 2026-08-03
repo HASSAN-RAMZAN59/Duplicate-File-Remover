@@ -1,4 +1,8 @@
 import { scanCategoryFiles } from './fileScanner';
+import { scanAudioFiles } from './audioScanner';
+import { calculateAudioDuplicates } from './audioHashEngine';
+import { scanDocumentFiles } from './documentScanner';
+import { calculateDocumentDuplicates } from './documentHashEngine';
 import { scanContactDuplicates } from './contactScanner';
 import { calculateDuplicates, formatBytes } from './hashEngine';
 
@@ -40,6 +44,12 @@ export const runDeepScan = async (onProgressCallback) => {
       let groups = [];
       if (category.id === 'contacts') {
         groups = await scanContactDuplicates();
+      } else if (category.id === 'audio') {
+        const rawFiles = await scanAudioFiles();
+        groups = calculateAudioDuplicates(rawFiles);
+      } else if (category.id === 'documents') {
+        const rawFiles = await scanDocumentFiles();
+        groups = calculateDocumentDuplicates(rawFiles);
       } else {
         const rawFiles = await scanCategoryFiles(category.name);
         groups = calculateDuplicates(rawFiles);

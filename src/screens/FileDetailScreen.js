@@ -8,12 +8,62 @@ import {
   ScrollView,
   Image,
   Alert,
+  Linking,
+  Clipboard,
+  ToastAndroid,
+  Platform,
+  NativeModules,
   Share as RNShareNative,
 } from 'react-native';
 import FileViewer from 'react-native-file-viewer';
 import RNShare from 'react-native-share';
 import { formatBytes } from '../engine/hashEngine';
 import { deleteFileFromDevice } from '../engine/fileScanner';
+import { VideoThumbnail } from '../components/VideoThumbnail';
+import { ROUTES } from '../navigation/routes';
+
+/**
+ * Helper to determine accurate MIME type for cross-app file opening and sharing
+ */
+const getMimeType = (fileName = '', category = '') => {
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  
+  if (['.jpg', '.jpeg'].includes(ext)) return 'image/jpeg';
+  if (['.png'].includes(ext)) return 'image/png';
+  if (['.gif'].includes(ext)) return 'image/gif';
+  if (['.webp'].includes(ext)) return 'image/webp';
+  if (['.bmp'].includes(ext)) return 'image/bmp';
+  if (['.heic'].includes(ext)) return 'image/heic';
+  
+  if (['.mp4'].includes(ext)) return 'video/mp4';
+  if (['.mkv'].includes(ext)) return 'video/x-matroska';
+  if (['.avi'].includes(ext)) return 'video/x-msvideo';
+  if (['.mov'].includes(ext)) return 'video/quicktime';
+  if (['.3gp'].includes(ext)) return 'video/3gpp';
+  if (['.webm'].includes(ext)) return 'video/webm';
+  if (['.m4v'].includes(ext)) return 'video/x-m4v';
+  
+  if (['.mp3'].includes(ext)) return 'audio/mpeg';
+  if (['.wav'].includes(ext)) return 'audio/wav';
+  if (['.m4a', '.aac'].includes(ext)) return 'audio/aac';
+  if (['.ogg', '.opus'].includes(ext)) return 'audio/ogg';
+  if (['.flac'].includes(ext)) return 'audio/flac';
+  
+  if (['.pdf'].includes(ext)) return 'application/pdf';
+  if (['.txt'].includes(ext)) return 'text/plain';
+  if (['.doc', '.docx'].includes(ext)) return 'application/msword';
+  if (['.xls', '.xlsx'].includes(ext)) return 'application/vnd.ms-excel';
+  if (['.zip', '.rar', '.7z'].includes(ext)) return 'application/zip';
+  if (['.apk'].includes(ext)) return 'application/vnd.android.package-archive';
+
+  const catUpper = (category || '').toUpperCase();
+  if (catUpper === 'IMAGES') return 'image/*';
+  if (catUpper === 'VIDEOS') return 'video/*';
+  if (catUpper === 'AUDIO') return 'audio/*';
+  if (catUpper === 'DOCUMENTS') return 'application/*';
+
+  return '*/*';
+};
 
 export const FileDetailScreen = ({ route, navigation }) => {
   const { file = {} } = route.params || {};
@@ -33,67 +83,140 @@ export const FileDetailScreen = ({ route, navigation }) => {
 
   const isVideoFile =
     file.category?.toUpperCase() === 'VIDEOS' ||
-    ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.3gp'].some((ext) =>
+    ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.3gp', '.webm', '.m4v', '.ts', '.m2ts', '.mpg', '.mpeg', '.3g2', '.vob', '.divx'].some((ext) =>
       file.name?.toLowerCase().endsWith(ext)
     );
 
   // 1. Copy File Location Handler
   const handleCopyLocation = () => {
+    const targetPath = file.path || fileUri;
+    if (!targetPath) return;
+
+    try {
+      if (Clipboard && typeof Clipboard.setString === 'function') {
+        Clipboard.setString(targetPath);
+      }
+    } catch (e) {}
+
+    if (Platform.OS === 'android' && ToastAndroid) {
+      ToastAndroid.show('Location copied to clipboard', ToastAndroid.SHORT);
+    }
+
     setCopiedToast(true);
     setTimeout(() => {
       setCopiedToast(false);
     }, 2000);
   };
 
-  // 2. Open File Natively via FileViewer Intent
+  // 2. Open File Handler (Native ACTION_VIEW Intent / FileViewer / Linking)
   const handleOpenFile = async () => {
-    try {
-      if (!file.path) return;
+    if (!file.path) {
+      Alert.alert('Unable to Open', 'File path is unavailable.');
+      return;
+    }
 
+    const cleanPath = file.path.startsWith('file://') ? file.path.substring(7) : file.path;
+    const mimeType = getMimeType(file.name || file.path, file.category);
+
+    // Tier 1: Primary Native ACTION_VIEW Intent (Opens Video Player / Gallery / Media Player chooser)
+    try {
+      const NativeFileDeleter = NativeModules.NativeFileDeleter;
+      if (NativeFileDeleter && typeof NativeFileDeleter.openFileNative === 'function') {
+        const opened = await NativeFileDeleter.openFileNative(cleanPath, mimeType);
+        if (opened) return;
+      }
+    } catch (e) {
+      console.log('[FileDetail] Native openFileNative failed, trying FileViewer fallback...', e);
+    }
+
+    // Tier 2: Try FileViewer
+    try {
       if (FileViewer && typeof FileViewer.open === 'function') {
-        await FileViewer.open(file.path, { showOpenWithDialog: true });
-      } else {
-        Alert.alert('File Location', file.path);
+        await FileViewer.open(cleanPath, { showOpenWithDialog: true });
+        return;
       }
     } catch (error) {
-      console.warn('[FileDetail] FileViewer error:', error);
-      Alert.alert('File Location', file.path || 'No path available');
+      console.log('[FileDetail] FileViewer fallback open failed...', error);
     }
+
+    // Tier 3: Try Linking openURL
+    try {
+      const canOpen = await Linking.canOpenURL(fileUri);
+      if (canOpen) {
+        await Linking.openURL(fileUri);
+        return;
+      }
+    } catch (linkingErr) {}
+
+    showFallbackOpenAlert();
   };
 
-  // 3. Share File Natively via react-native-share (Attached Image/Video Binary)
-  const handleShareFile = async () => {
-    try {
-      if (!file.path) return;
+  const showFallbackOpenAlert = () => {
+    if (Platform.OS === 'android' && ToastAndroid) {
+      ToastAndroid.show('No compatible app found to open this file.', ToastAndroid.LONG);
+    }
+    Alert.alert(
+      'No Compatible App Found',
+      `Could not find a compatible app on your device to open "${file.name || 'this file'}".\n\nLocation: ${file.path}`
+    );
+  };
 
-      let mimeType = '*/*';
-      if (isImageFile) mimeType = 'image/*';
-      else if (isVideoFile) mimeType = 'video/*';
+  // 3. Share File Handler (Native FileProvider Share / react-native-share)
+  const handleShareFile = async () => {
+    if (!file.path) {
+      Alert.alert('Unable to Share', 'File path is unavailable.');
+      return;
+    }
+
+    const mimeType = getMimeType(file.name || file.path, file.category);
+    const cleanPath = file.path.startsWith('file://') ? file.path.substring(7) : file.path;
+
+    // Tier 1: Primary Native Share via FileProvider Content Uri (Guaranteed for WhatsApp, Images, Videos)
+    try {
+      const NativeFileDeleter = NativeModules.NativeFileDeleter;
+      if (NativeFileDeleter && typeof NativeFileDeleter.shareFileNative === 'function') {
+        const shared = await NativeFileDeleter.shareFileNative(cleanPath, mimeType);
+        if (shared) return;
+      }
+    } catch (nativeErr) {
+      console.log('[FileDetail] Native shareFileNative failed, trying RNShare fallback...', nativeErr);
+    }
+
+    // Tier 2: RNShare Fallback with safe URI encoding
+    try {
+      let safeUri = fileUri;
+      if (safeUri.startsWith('file://')) {
+        const raw = safeUri.substring(7);
+        safeUri = `file://${encodeURI(decodeURIComponent(raw))}`;
+      }
 
       if (RNShare && typeof RNShare.open === 'function') {
         await RNShare.open({
-          url: fileUri,
+          url: safeUri,
           type: mimeType,
-          title: file.name || 'Share File',
+          title: `Share ${file.name || 'File'}`,
+          subject: file.name,
           failOnCancel: false,
         });
       } else {
         await RNShareNative.share({
-          title: file.name || 'Share File',
+          title: `Share ${file.name || 'File'}`,
           message: `File: ${file.name}\nPath: ${file.path}`,
-          url: fileUri,
+          url: safeUri,
         });
       }
     } catch (error) {
-      console.warn('[FileDetail] Share error:', error);
+      if (error && error.message && !error.message.includes('User did not share')) {
+        console.warn('[FileDetail] Share error:', error);
+      }
     }
   };
 
-  // 4. Delete File Handler
+  // 4. Delete File Handler (Cross-Android version deletion + Navigation Back sync)
   const handleDeleteFile = () => {
     Alert.alert(
       'Confirm Deletion',
-      `Are you sure you want to permanently delete "${file.name}"?`,
+      `Are you sure you want to delete this file permanently?\n\n${file.name || ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -101,22 +224,34 @@ export const FileDetailScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: async () => {
             setIsDeleting(true);
-            const success = await deleteFileFromDevice(file.path);
-            setIsDeleting(false);
+            try {
+              const success = await deleteFileFromDevice(file.path);
+              setIsDeleting(false);
 
-            if (success) {
-              Alert.alert('File Deleted 🎉', 'The selected file has been removed from your device.', [
-                {
-                  text: 'OK',
-                  onPress: () =>
-                    navigation.navigate(ROUTES.DUPLICATE_VIEWER, {
-                      deletedFilePath: file.path,
-                      deletedFileId: file.id,
-                    }),
-                },
-              ]);
-            } else {
-              Alert.alert('Deletion Failed', 'Could not delete file from device storage.');
+              if (success) {
+                if (Platform.OS === 'android' && ToastAndroid) {
+                  ToastAndroid.show('File deleted successfully', ToastAndroid.SHORT);
+                }
+
+                // Automatically navigate BACK to previous screen and sync list state
+                if (navigation.canGoBack()) {
+                  navigation.navigate(ROUTES.DUPLICATE_VIEWER, {
+                    deletedFilePath: file.path,
+                    deletedFileId: file.id,
+                  });
+                } else {
+                  navigation.goBack();
+                }
+              } else {
+                Alert.alert(
+                  'Deletion Failed',
+                  'Could not delete the file from device storage. Please check storage permissions.'
+                );
+              }
+            } catch (err) {
+              setIsDeleting(false);
+              console.error('[FileDetail] Delete exception:', err);
+              Alert.alert('Error', 'An unexpected error occurred while deleting the file.');
             }
           },
         },
@@ -146,8 +281,10 @@ export const FileDetailScreen = ({ route, navigation }) => {
         <View style={styles.detailCard}>
           {/* Top Square Thumbnail Preview */}
           <View style={styles.thumbnailContainer}>
-            {isImageFile || isVideoFile ? (
+            {isImageFile ? (
               <Image source={{ uri: fileUri }} style={styles.thumbnailImage} resizeMode="cover" />
+            ) : isVideoFile && file.path ? (
+              <VideoThumbnail filePath={file.path} style={styles.thumbnailImage} resizeMode="cover" />
             ) : (
               <View style={styles.fallbackIconWrapper}>
                 <Text style={styles.fallbackIcon}>📁</Text>
@@ -214,8 +351,10 @@ export const FileDetailScreen = ({ route, navigation }) => {
 
           {/* Large Full Preview Box */}
           <View style={styles.largePreviewBox}>
-            {isImageFile || isVideoFile ? (
+            {isImageFile ? (
               <Image source={{ uri: fileUri }} style={styles.largePreviewImage} resizeMode="contain" />
+            ) : isVideoFile && file.path ? (
+              <VideoThumbnail filePath={file.path} style={styles.largePreviewImage} resizeMode="contain" />
             ) : (
               <View style={styles.largeFallbackContent}>
                 <Text style={styles.largeFallbackIcon}>📄</Text>

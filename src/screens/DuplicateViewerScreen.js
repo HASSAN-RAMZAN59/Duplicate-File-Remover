@@ -1,21 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
-  TouchableOpacity,
   FlatList,
+  TouchableOpacity,
   ActivityIndicator,
   Alert,
   Image,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
 import { scanCategoryFiles } from '../engine/fileScanner';
+import { scanAudioFiles } from '../engine/audioScanner';
+import { calculateAudioDuplicates } from '../engine/audioHashEngine';
 import { scanContactDuplicates } from '../engine/contactScanner';
+import { scanDocumentFiles } from '../engine/documentScanner';
+import { calculateDocumentDuplicates } from '../engine/documentHashEngine';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
 import { deleteBatch } from '../engine/fileDeleter';
+import { VideoThumbnail } from '../components/VideoThumbnail';
 
 export const DuplicateViewerScreen = ({ route, navigation }) => {
   const { categoryType = 'Images' } = route.params || {};
@@ -24,54 +30,72 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   const [duplicateGroups, setDuplicateGroups] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 1. Run Background Scanning Engine on Component Mount
-  useEffect(() => {
-    let isMounted = true;
+  // 1. Run Fresh Real-Time Scanning Engine whenever screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
 
-    const performScan = async () => {
-      setIsLoading(true);
-      try {
-        let groups = [];
-        if (categoryType.toUpperCase() === 'CONTACTS') {
-          groups = await scanContactDuplicates();
-          console.log(`[DuplicateViewer] Contacts Scan Result:`, { duplicateGroupsCount: groups.length });
-        } else {
-          const rawFiles = await scanCategoryFiles(categoryType);
-          groups = calculateDuplicates(rawFiles);
+      const performScan = async () => {
+        setIsLoading(true);
+        try {
+          let groups = [];
+          let rawFiles = [];
 
-          console.log(`[DuplicateViewer] Scanning Result for ${categoryType}:`, {
-            rawCount: rawFiles.length,
-            duplicateGroupsCount: groups.length,
-          });
+          if (categoryType.toUpperCase() === 'CONTACTS') {
+            groups = await scanContactDuplicates();
+            console.log(`[DuplicateViewer] Contacts Scan Result:`, { duplicateGroupsCount: groups.length });
+          } else if (categoryType.toUpperCase() === 'AUDIO') {
+            rawFiles = await scanAudioFiles();
+            groups = calculateAudioDuplicates(rawFiles);
+            console.log(`[DuplicateViewer] Audio Scan Result:`, {
+              rawCount: rawFiles.length,
+              duplicateGroupsCount: groups.length,
+            });
+          } else if (categoryType.toUpperCase() === 'DOCUMENTS') {
+            rawFiles = await scanDocumentFiles();
+            groups = calculateDocumentDuplicates(rawFiles);
+            console.log(`[DuplicateViewer] Documents Scan Result:`, {
+              rawCount: rawFiles.length,
+              duplicateGroupsCount: groups.length,
+            });
+          } else {
+            rawFiles = await scanCategoryFiles(categoryType);
+            groups = calculateDuplicates(rawFiles);
+
+            console.log(`[DuplicateViewer] Real-Time Scan Result for ${categoryType}:`, {
+              rawCount: rawFiles.length,
+              duplicateGroupsCount: groups.length,
+            });
+          }
 
           if (rawFiles.length > 0 && groups.length === 0) {
-            console.warn(
-              `[DuplicateViewer] Raw files were fetched (${rawFiles.length}), but 0 duplicate groups were matched!`
+            console.log(
+              `[DuplicateViewer] Raw files were fetched (${rawFiles.length}), 0 duplicate groups matched.`
             );
           }
-        }
 
-        if (isMounted) {
-          setDuplicateGroups(groups);
+          if (isMounted) {
+            setDuplicateGroups(groups);
+          }
+        } catch (error) {
+          console.error('[DuplicateViewer] Scanning error:', error);
+          if (isMounted) {
+            setDuplicateGroups([]);
+          }
+        } finally {
+          if (isMounted) {
+            setIsLoading(false);
+          }
         }
-      } catch (error) {
-        console.error('[DuplicateViewer] Scanning error:', error);
-        if (isMounted) {
-          setDuplicateGroups([]);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
+      };
 
-    performScan();
+      performScan();
 
-    return () => {
-      isMounted = false;
-    };
-  }, [categoryType]);
+      return () => {
+        isMounted = false;
+      };
+    }, [categoryType])
+  );
 
   // Handle single file deletion sync when returning from FileDetailScreen
   useEffect(() => {
@@ -109,20 +133,20 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       group.files.forEach((file) => {
         if (file.selected) {
           selectedCount += 1;
-          selectedBytes += file.size || 0;
+          selectedBytes += Number(file.size || 0);
         }
       });
     });
 
     return {
-      count: selectedCount,
-      bytes: selectedBytes,
-      formattedSize: formatBytes(selectedBytes),
+      selectedCount,
+      selectedBytes,
+      formattedBytes: formatBytes(selectedBytes),
     };
   }, [duplicateGroups]);
 
-  // 3. Toggle selection for a single file item
-  const handleToggleFileSelection = (groupId, fileId) => {
+  // 3. Selection Handlers
+  const toggleFileSelection = (groupId, fileId) => {
     setDuplicateGroups((prevGroups) =>
       prevGroups.map((group) => {
         if (group.groupId !== groupId) return group;
@@ -137,46 +161,43 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     );
   };
 
-  // 4. Toggle selection for an entire duplicate group
-  const handleToggleGroupSelection = (groupId) => {
+  const toggleSelectAllGroup = (groupId) => {
     setDuplicateGroups((prevGroups) =>
       prevGroups.map((group) => {
         if (group.groupId !== groupId) return group;
-        const allDuplicatesSelected = group.files
-          .filter((f) => !f.isOriginal)
-          .every((f) => f.selected);
+        const duplicateFiles = group.files.filter((f) => !f.isOriginal);
+        const areAllDuplicatesSelected = duplicateFiles.every((f) => f.selected);
 
         return {
           ...group,
           files: group.files.map((file) => {
-            if (file.isOriginal) return { ...file, selected: false };
-            return { ...file, selected: !allDuplicatesSelected };
+            if (file.isOriginal) return file;
+            return { ...file, selected: !areAllDuplicatesSelected };
           }),
         };
       })
     );
   };
 
-  // 5. Execute Deletion Handler
+  // 4. Batch Delete Handler
   const handleDeleteSelected = () => {
-    if (selectionSummary.count === 0) {
-      Alert.alert('No Files Selected', 'Please select at least 1 duplicate item to delete.');
+    if (selectionSummary.selectedCount === 0) {
+      Alert.alert('No Selection', 'Please select at least one duplicate file to delete.');
       return;
     }
 
     Alert.alert(
       'Confirm Deletion',
-      `Are you sure you want to permanently delete ${selectionSummary.count} selected duplicate item(s) (${selectionSummary.formattedSize})?`,
+      `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})? This action will remove them from your device.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Now',
+          text: 'Delete Permanently',
           style: 'destructive',
           onPress: async () => {
             setIsDeleting(true);
-
-            // Collect selected items to delete
             const selectedItems = [];
+
             duplicateGroups.forEach((group) => {
               group.files.forEach((file) => {
                 if (file.selected) {
@@ -185,95 +206,85 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
               });
             });
 
-            // Perform file/contact deletion via fileDeleter engine
-            const deleteResult = await deleteBatch(selectedItems);
+            try {
+              const res = await deleteBatch(selectedItems);
+              setIsDeleting(false);
 
-            // Automatically refresh local list by removing deleted items
-            setDuplicateGroups((prevGroups) => {
-              const updatedGroups = prevGroups
-                .map((group) => ({
-                  ...group,
-                  files: group.files.filter((file) => !file.selected),
-                  fileCount: group.files.filter((file) => !file.selected).length,
-                }))
-                .filter((group) => group.files.length > 1); // Discard groups with only 1 file remaining
+              if (res.deletedCount > 0) {
+                const deletedPathsSet = new Set(selectedItems.map((item) => item.path));
 
-              return updatedGroups;
-            });
+                setDuplicateGroups((prevGroups) => {
+                  const updatedGroups = prevGroups
+                    .map((group) => {
+                      const remainingFiles = group.files.filter(
+                        (file) => !deletedPathsSet.has(file.path)
+                      );
+                      return {
+                        ...group,
+                        files: remainingFiles,
+                        fileCount: remainingFiles.length,
+                      };
+                    })
+                    .filter((group) => group.files.length > 1);
 
-            setIsDeleting(false);
-            Alert.alert(
-              'Cleanup Complete 🎉',
-              `Successfully removed ${deleteResult.deletedCount} duplicate item(s) and freed ${deleteResult.freedFormatted} of storage!`
-            );
+                  return updatedGroups;
+                });
+
+                Alert.alert(
+                  'Cleaned Successfully 🎉',
+                  `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`
+                );
+              } else {
+                Alert.alert('Deletion Error', 'Could not remove selected files from storage.');
+              }
+            } catch (error) {
+              setIsDeleting(false);
+              Alert.alert('Error', 'An error occurred while deleting files.');
+            }
           },
         },
       ]
     );
   };
 
-  // Category Icon Resolver
-  const getCategoryIcon = () => {
-    switch (categoryType.toUpperCase()) {
-      case 'IMAGES':
-        return '🖼️';
-      case 'VIDEOS':
-        return '🎥';
-      case 'AUDIO':
-        return '🎵';
-      case 'DOCUMENTS':
-        return '📄';
-      case 'CONTACTS':
-        return '👥';
-      default:
-        return '📦';
-    }
-  };
+  // 5. Render Group Card
+  const renderGroupCard = ({ item: group }) => {
+    const duplicateFiles = group.files.filter((f) => !f.isOriginal);
+    const isGroupFullySelected = duplicateFiles.every((f) => f.selected);
 
-  // Render Item for Duplicate Group Card
-  const renderGroupCard = ({ item: group, index: groupIdx }) => {
     return (
       <View style={styles.groupCard}>
         {/* Group Header */}
         <View style={styles.groupHeader}>
-          <View style={styles.groupHeaderLeft}>
-            <Text style={styles.groupBadge}>Group {groupIdx + 1}</Text>
-            <Text style={styles.groupSubInfo}>
-              {group.fileCount} Files • {group.matchType}
+          <View style={styles.groupInfo}>
+            <Text style={styles.groupTitle}>
+              Group ({group.fileCount} items) • {group.individualSizeFormatted} each
+            </Text>
+            <Text style={styles.groupSubtitle}>
+              Match: {group.matchType} • Reclaim: {group.reclaimableFormatted}
             </Text>
           </View>
           <TouchableOpacity
-            onPress={() => handleToggleGroupSelection(group.groupId)}
-            activeOpacity={0.7}
+            style={styles.selectAllButton}
+            onPress={() => toggleSelectAllGroup(group.groupId)}
           >
-            <Text style={styles.selectAllText}>Select All Duplicates</Text>
+            <Text style={styles.selectAllText}>
+              {isGroupFullySelected ? 'Deselect Group' : 'Select Group'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.divider} />
-
-        {/* List of Files in Group */}
-        {group.files.map((file) => {
-          const isImageFile =
-            categoryType.toUpperCase() === 'IMAGES' ||
-            ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic'].some((ext) =>
-              file.name?.toLowerCase().endsWith(ext)
-            );
-
-          const isVideoFile =
-            categoryType.toUpperCase() === 'VIDEOS' ||
-            ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.3gp'].some((ext) =>
-              file.name?.toLowerCase().endsWith(ext)
-            );
-
-          const fileUri =
-            file.path && (file.path.startsWith('file://') || file.path.startsWith('content://'))
-              ? file.path
-              : `file://${file.path}`;
+        {/* File Item List inside Group */}
+        {group.files.map((file, idx) => {
+          const ext = (file.extension || '').toLowerCase();
+          const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp', '.svg'].includes(ext);
+          const isVideo =
+            (file.category && file.category.toUpperCase() === 'VIDEOS') ||
+            ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.3gp', '.webm', '.m4v', '.ts', '.m2ts', '.mpg', '.mpeg', '.3g2', '.vob', '.divx'].includes(ext);
 
           return (
             <TouchableOpacity
-              key={file.id}
+              key={file.id || file.path || `file_${idx}`}
               style={[
                 styles.fileItem,
                 file.isOriginal && styles.originalFileItem,
@@ -285,48 +296,59 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
               {/* Checkbox / Badge */}
               <TouchableOpacity
                 style={styles.checkboxContainer}
-                onPress={() => !file.isOriginal && handleToggleFileSelection(group.groupId, file.id)}
-                activeOpacity={0.7}
+                onPress={() => toggleFileSelection(group.groupId, file.id)}
+                disabled={file.isOriginal}
               >
                 {file.isOriginal ? (
                   <View style={styles.originalBadge}>
-                    <Text style={styles.originalBadgeText}>SAFE ORIGINAL</Text>
+                    <Text style={styles.originalBadgeText}>Original</Text>
                   </View>
                 ) : (
-                  <View style={[styles.checkbox, file.selected && styles.checkboxChecked]}>
+                  <View style={[styles.checkbox, file.selected && styles.checkboxSelected]}>
                     {file.selected && <Text style={styles.checkmark}>✓</Text>}
                   </View>
                 )}
               </TouchableOpacity>
 
-              {/* Thumbnail Preview for Images & Videos */}
-              {(isImageFile || isVideoFile) && file.path && !file.path.startsWith('Phone:') ? (
-                <View style={styles.thumbnailWrapper}>
+              {/* 46x46 Thumbnail Preview */}
+              <View style={styles.thumbnailWrapper}>
+                {isImage && file.path ? (
                   <Image
-                    source={{ uri: fileUri }}
+                    source={{ uri: file.path.startsWith('/') ? `file://${file.path}` : file.path }}
                     style={styles.thumbnailImage}
                     resizeMode="cover"
                   />
-                  {isVideoFile && (
-                    <View style={styles.videoOverlayBadge}>
-                      <Text style={styles.videoOverlayIcon}>▶</Text>
-                    </View>
-                  )}
-                </View>
-              ) : null}
+                ) : isVideo && file.path ? (
+                  <VideoThumbnail
+                    filePath={file.path}
+                    style={styles.thumbnailImage}
+                    resizeMode="cover"
+                    showPlayBadge={true}
+                  />
+                ) : (
+                  <View style={styles.thumbnailFallback}>
+                    <Text style={styles.thumbnailFallbackIcon}>
+                      {isVideo
+                        ? '🎥'
+                        : file.category === 'Audio' || (ext && ['.mp3', '.wav', '.m4a', '.aac', '.opus', '.ogg', '.flac'].includes(ext))
+                        ? '🎵'
+                        : file.category === 'Contacts'
+                        ? '👥'
+                        : '📄'}
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               {/* File Info */}
               <View style={styles.fileDetails}>
-                <Text style={styles.fileName} numberOfLines={1} ellipsisMode="middle">
-                  {file.name}
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {file.title || file.name}
                 </Text>
-                <Text style={styles.filePath} numberOfLines={1} ellipsisMode="middle">
+                <Text style={styles.filePath} numberOfLines={1}>
                   {file.path}
                 </Text>
               </View>
-
-              {/* File Size */}
-              <Text style={styles.fileSize}>{formatBytes(file.size)}</Text>
             </TouchableOpacity>
           );
         })}
@@ -336,86 +358,66 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header Bar */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          accessibilityLabel="Go Back"
-        >
-          <Text style={styles.backIconText}>←</Text>
+      {/* Top Bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-
-        <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerTitle}>
-            {getCategoryIcon()} {categoryType} Duplicates
-          </Text>
-          {!isLoading && (
-            <Text style={styles.headerSubtitle}>
-              {duplicateGroups.length} Group(s) Found
-            </Text>
-          )}
-        </View>
-        <View style={{ width: 44 }} />
+        <Text style={styles.topBarTitle}>{categoryType} Duplicates</Text>
+        <View style={{ width: 60 }} />
       </View>
 
-      {/* Main Content Body */}
+      {/* Screen Body */}
       {isLoading ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={COLORS.primaryLight || '#3B82F6'} />
-          <Text style={styles.loadingTitle}>Scanning {categoryType}...</Text>
-          <Text style={styles.loadingSubtitle}>
-            Analyzing file size matching & verifying MD5 checksums...
-          </Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={styles.loadingText}>Scanning {categoryType} for duplicates...</Text>
         </View>
       ) : duplicateGroups.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🎉</Text>
           <Text style={styles.emptyTitle}>No Duplicates Found</Text>
           <Text style={styles.emptySubtitle}>
-            Your {categoryType.toLowerCase()} storage is completely clean and optimized!
+            Your {categoryType} storage is clean! No duplicate files were detected.
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={duplicateGroups}
-          keyExtractor={(item) => item.groupId}
-          renderItem={renderGroupCard}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+        <View style={{ flex: 1 }}>
+          <FlatList
+            data={duplicateGroups}
+            keyExtractor={(item) => item.groupId}
+            renderItem={renderGroupCard}
+            contentContainerStyle={styles.listContent}
+          />
 
-      {/* Floating Bottom Action Bar */}
-      {!isLoading && duplicateGroups.length > 0 && (
-        <View style={styles.bottomActionBar}>
-          <View style={styles.actionInfo}>
-            <Text style={styles.actionCount}>
-              {selectionSummary.count} Item(s) Selected
-            </Text>
-            <Text style={styles.actionSize}>
-              Reclaim {selectionSummary.formattedSize}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.deleteButton,
-              (selectionSummary.count === 0 || isDeleting) && styles.disabledButton,
-            ]}
-            onPress={handleDeleteSelected}
-            disabled={selectionSummary.count === 0 || isDeleting}
-            activeOpacity={0.85}
-          >
-            {isDeleting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.deleteButtonText}>
-                🗑️ Delete Selected ({selectionSummary.formattedSize})
+          {/* Bottom Floating Action Bar */}
+          <View style={styles.bottomBar}>
+            <View style={styles.summaryContainer}>
+              <Text style={styles.summaryText}>
+                Selected: {selectionSummary.selectedCount} file(s)
               </Text>
-            )}
-          </TouchableOpacity>
+              <Text style={styles.summarySubtext}>
+                Reclaim: {selectionSummary.formattedBytes}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.deleteButton,
+                (selectionSummary.selectedCount === 0 || isDeleting) && styles.disabledDeleteButton,
+              ]}
+              onPress={handleDeleteSelected}
+              disabled={selectionSummary.selectedCount === 0 || isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.deleteButtonText}>
+                  Delete Selected ({selectionSummary.selectedCount})
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -427,264 +429,244 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background || '#0A0F1D',
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder || '#1E293B',
+    borderBottomColor: '#1E293B',
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.cardBackground || '#1E293B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryLight ? COLORS.primaryLight + '60' : '#3B82F6',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
   },
-  backIconText: {
-    fontSize: 22,
-    color: COLORS.textPrimary || '#FFFFFF',
+  backButtonText: {
+    color: '#3B82F6',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  topBarTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
     fontWeight: 'bold',
   },
-  headerTitleGroup: {
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: COLORS.secondary || '#94A3B8',
-    marginTop: 2,
-  },
-  loaderContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
   },
-  loadingTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
-    marginTop: 16,
-  },
-  loadingSubtitle: {
-    fontSize: 13,
-    color: COLORS.textMuted || '#64748B',
-    textAlign: 'center',
-    marginTop: 8,
+  loadingText: {
+    color: '#94A3B8',
+    marginTop: 12,
+    fontSize: 15,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    paddingHorizontal: 32,
   },
   emptyIcon: {
     fontSize: 54,
     marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: COLORS.textSecondary || '#94A3B8',
+    color: '#94A3B8',
     textAlign: 'center',
     lineHeight: 20,
   },
   listContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 90,
   },
   groupCard: {
-    backgroundColor: COLORS.cardBackground || '#1E293B',
-    borderRadius: 16,
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
     padding: 14,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder || '#334155',
   },
   groupHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+    paddingBottom: 10,
+    marginBottom: 12,
   },
-  groupHeaderLeft: {
+  groupInfo: {
     flex: 1,
   },
-  groupBadge: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primaryLight || '#3B82F6',
+  groupTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: 'bold',
   },
-  groupSubInfo: {
-    fontSize: 11,
-    color: COLORS.textMuted || '#64748B',
+  groupSubtitle: {
+    color: '#10B981',
+    fontSize: 12,
     marginTop: 2,
   },
+  selectAllButton: {
+    backgroundColor: '#334155',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
   selectAllText: {
+    color: '#3B82F6',
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.secondary || '#38BDF8',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.cardBorder || '#334155',
-    marginVertical: 10,
   },
   fileItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    backgroundColor: '#0F172A',
     borderRadius: 10,
-    marginBottom: 6,
-    backgroundColor: 'transparent',
+    padding: 10,
+    marginBottom: 8,
   },
   originalFileItem: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#10B981',
   },
   selectedFileItem: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#EF4444',
   },
   checkboxContainer: {
     marginRight: 10,
-  },
-  thumbnailWrapper: {
-    width: 46,
-    height: 46,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: COLORS.cardBackground || '#1E293B',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder || '#334155',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  thumbnailImage: {
-    width: '100%',
-    height: '100%',
-  },
-  videoOverlayBadge: {
-    position: 'absolute',
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoOverlayIcon: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    marginLeft: 1,
-  },
-  originalBadge: {
-    backgroundColor: '#10B981',
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-  },
-  originalBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: COLORS.cardBorder || '#64748B',
+    borderColor: '#64748B',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkboxChecked: {
-    backgroundColor: COLORS.primary || '#3B82F6',
-    borderColor: COLORS.primary || '#3B82F6',
+  checkboxSelected: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
   },
   checkmark: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+  originalBadge: {
+    backgroundColor: '#065F46',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  originalBadgeText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  thumbnailWrapper: {
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#334155',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    position: 'relative',
+  },
+  thumbnailImage: {
+    width: 46,
+    height: 46,
+  },
+  thumbnailFallback: {
+    width: 46,
+    height: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#334155',
+  },
+  thumbnailFallbackIcon: {
+    fontSize: 22,
+  },
+  videoBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  videoBadgeIcon: {
+    color: '#FFFFFF',
+    fontSize: 10,
   },
   fileDetails: {
     flex: 1,
-    marginRight: 8,
   },
   fileName: {
-    fontSize: 13,
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textPrimary || '#FFFFFF',
   },
   filePath: {
+    color: '#64748B',
     fontSize: 11,
-    color: COLORS.textMuted || '#64748B',
     marginTop: 2,
   },
-  fileSize: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary || '#94A3B8',
-  },
-  bottomActionBar: {
+  bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: COLORS.cardBackground || '#1E293B',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.cardBorder || '#334155',
+    backgroundColor: '#1E293B',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    elevation: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
   },
-  actionInfo: {
+  summaryContainer: {
     flex: 1,
   },
-  actionCount: {
+  summaryText: {
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
+    fontWeight: 'bold',
   },
-  actionSize: {
+  summarySubtext: {
+    color: '#10B981',
     fontSize: 12,
-    color: COLORS.success || '#10B981',
-    fontWeight: '600',
     marginTop: 2,
   },
   deleteButton: {
     backgroundColor: '#EF4444',
     paddingVertical: 12,
     paddingHorizontal: 18,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 10,
   },
-  disabledButton: {
+  disabledDeleteButton: {
     backgroundColor: '#475569',
     opacity: 0.6,
   },
   deleteButtonText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
