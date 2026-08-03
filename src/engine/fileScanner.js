@@ -71,21 +71,35 @@ const ensureCategoryPermission = async (categoryType) => {
   if (Platform.OS !== 'android') return true;
 
   try {
-    if (Platform.Version >= 33) {
-      const results = await Promise.all([
-        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES),
-        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO),
-        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO),
-      ]);
+    const catUpper = (categoryType || '').toUpperCase();
 
-      const [hasImg, hasVid, hasAud] = results;
+    if (Platform.Version >= 30) {
+      if (catUpper === 'DOCUMENTS' || catUpper === 'OTHERS') {
+        const NativeFileDeleter = NativeModules.NativeFileDeleter;
+        if (NativeFileDeleter && typeof NativeFileDeleter.isAllFilesPermissionGranted === 'function') {
+          const isAllOk = await NativeFileDeleter.isAllFilesPermissionGranted();
+          if (!isAllOk && typeof NativeFileDeleter.requestAllFilesPermission === 'function') {
+            await NativeFileDeleter.requestAllFilesPermission();
+          }
+        }
+      }
 
-      if (!hasImg || !hasVid || !hasAud) {
-        await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
-          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+      if (Platform.Version >= 33) {
+        const results = await Promise.all([
+          PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES),
+          PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO),
+          PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO),
         ]);
+
+        const [hasImg, hasVid, hasAud] = results;
+
+        if (!hasImg || !hasVid || !hasAud) {
+          await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+            PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+            PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+          ]);
+        }
       }
       return true;
     } else {

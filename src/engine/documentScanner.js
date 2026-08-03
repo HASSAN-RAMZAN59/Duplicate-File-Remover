@@ -38,15 +38,27 @@ const DOCUMENT_STORAGE_PATHS = [
 
 /**
  * Ensures Native Android Permissions for Storage & Documents
+ * Requests MANAGE_EXTERNAL_STORAGE (All Files Access) on Android 11+ (API 30+) for unrestricted document reading
  */
 const ensureDocumentPermission = async () => {
   if (Platform.OS !== 'android') return true;
 
   try {
-    if (Platform.Version >= 33) {
-      const hasImg = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
-      if (!hasImg) {
-        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+    if (Platform.Version >= 30) {
+      const NativeFileDeleter = NativeModules.NativeFileDeleter;
+      if (NativeFileDeleter && typeof NativeFileDeleter.isAllFilesPermissionGranted === 'function') {
+        const isAllGranted = await NativeFileDeleter.isAllFilesPermissionGranted();
+        console.log('[DocumentScanner] All Files Access Granted:', isAllGranted);
+        if (!isAllGranted && typeof NativeFileDeleter.requestAllFilesPermission === 'function') {
+          await NativeFileDeleter.requestAllFilesPermission();
+        }
+      }
+
+      if (Platform.Version >= 33) {
+        const hasImg = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+        if (!hasImg) {
+          await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+        }
       }
       return true;
     } else {

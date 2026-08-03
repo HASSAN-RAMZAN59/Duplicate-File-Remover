@@ -19,6 +19,7 @@ import { calculateAudioDuplicates } from '../engine/audioHashEngine';
 import { scanContactDuplicates } from '../engine/contactScanner';
 import { scanDocumentFiles } from '../engine/documentScanner';
 import { calculateDocumentDuplicates } from '../engine/documentHashEngine';
+import { calculateImageDuplicates } from '../engine/imageHashEngine';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
 import { deleteBatch } from '../engine/fileDeleter';
 import { VideoThumbnail } from '../components/VideoThumbnail';
@@ -55,6 +56,13 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
             rawFiles = await scanDocumentFiles();
             groups = calculateDocumentDuplicates(rawFiles);
             console.log(`[DuplicateViewer] Documents Scan Result:`, {
+              rawCount: rawFiles.length,
+              duplicateGroupsCount: groups.length,
+            });
+          } else if (categoryType.toUpperCase() === 'IMAGES') {
+            rawFiles = await scanCategoryFiles('Images');
+            groups = await calculateImageDuplicates(rawFiles);
+            console.log(`[DuplicateViewer] Ultra-Strict Images Scan Result:`, {
               rawCount: rawFiles.length,
               duplicateGroupsCount: groups.length,
             });
