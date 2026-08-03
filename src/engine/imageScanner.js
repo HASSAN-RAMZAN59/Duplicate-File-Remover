@@ -16,19 +16,25 @@ export const IMAGE_EXTENSIONS = [
 ];
 
 /**
- * Top Storage Directories for Image Scans (Includes Documents, Downloads, Pictures, DCIM, WhatsApp, Editors)
+ * Top Storage Directories for Image Scans (Includes Documents, Downloads, Pictures, DCIM, WhatsApp, Editors, Movies)
  */
 const IMAGE_STORAGE_PATHS = [
   '/storage/emulated/0/DCIM',
   '/storage/emulated/0/DCIM/Camera',
   '/storage/emulated/0/DCIM/Screenshots',
   '/storage/emulated/0/DCIM/100ANDRO',
+  '/storage/emulated/0/DCIM/Restored',
   '/storage/emulated/0/Pictures',
   '/storage/emulated/0/Pictures/Screenshots',
   '/storage/emulated/0/Pictures/Instagram',
   '/storage/emulated/0/Pictures/Facebook',
   '/storage/emulated/0/Pictures/Telegram',
   '/storage/emulated/0/Pictures/WhatsApp',
+  '/storage/emulated/0/Pictures/PhotoEditor',
+  '/storage/emulated/0/Pictures/PicsArt',
+  '/storage/emulated/0/Pictures/Snapseed',
+  '/storage/emulated/0/Pictures/Lightroom',
+  '/storage/emulated/0/Pictures/Canva',
   '/storage/emulated/0/Documents',
   '/storage/emulated/0/Document',
   '/storage/emulated/0/Download',
@@ -53,7 +59,6 @@ const ensureImagePermission = async () => {
       if (!hasImg) {
         await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
       }
-      // Also request ALL_FILES_ACCESS on Android 11+ to ensure Documents/ & Download/ images are readable
       const NativeFileDeleter = NativeModules.NativeFileDeleter;
       if (NativeFileDeleter && typeof NativeFileDeleter.isAllFilesPermissionGranted === 'function') {
         const isAllGranted = await NativeFileDeleter.isAllFilesPermissionGranted();
@@ -89,10 +94,29 @@ const ensureImagePermission = async () => {
 };
 
 /**
- * Recursive Directory Traversal for Image Scanning (maxDepth = 8)
- * Ensures photos in Documents/, Download/, Pictures/, DCIM/, WhatsApp, etc. are all fetched.
+ * Path Normalization Helper
  */
-const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 8) => {
+const normalizePath = (rawPath = '') => {
+  if (!rawPath) return '';
+  let clean = rawPath;
+  if (clean.startsWith('file://')) {
+    clean = clean.substring(7);
+  }
+  try {
+    clean = decodeURIComponent(clean);
+  } catch (e) {}
+
+  if (clean.startsWith('/sdcard/')) {
+    clean = clean.replace('/sdcard/', '/storage/emulated/0/');
+  }
+  return clean;
+};
+
+/**
+ * Recursive Directory Traversal for Image Scanning (maxDepth = 10)
+ * Ensures photos in Documents/, Download/, Movies/, Pictures/, DCIM/, Image Editors, etc. are all fetched.
+ */
+const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 10) => {
   if (depth > maxDepth) return;
 
   try {
@@ -120,23 +144,12 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
           const ext = lastDot !== -1 ? item.name.substring(lastDot).toLowerCase() : '';
 
           if (IMAGE_EXTENSIONS.includes(ext)) {
-            let rawPath = item.path || '';
-            if (rawPath.startsWith('file://')) {
-              rawPath = rawPath.substring(7);
-            }
-            try {
-              rawPath = decodeURIComponent(rawPath);
-            } catch (e) {}
-
-            const filePath = rawPath.startsWith('/sdcard/')
-              ? rawPath.replace('/sdcard/', '/storage/emulated/0/')
-              : rawPath;
-
+            const filePath = normalizePath(item.path || '');
             const fileSize = Number(item.size || 0);
             const settings = getActiveSettings();
             const minSizeThreshold = settings && settings.ignoreSmallFiles ? 102400 : 0;
 
-            if (!scannedFilesMap.has(filePath) && fileSize > minSizeThreshold) {
+            if (filePath && !scannedFilesMap.has(filePath) && fileSize > minSizeThreshold) {
               const fileTimestamp = item.mtime ? new Date(item.mtime).getTime() : Date.now();
               scannedFilesMap.set(filePath, {
                 id: filePath,
@@ -164,7 +177,7 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
 
 /**
  * Main Exhaustive Image Scanner Function
- * Crawls root storage, Documents/, Downloads/, DCIM/, Pictures/ and all subdirectories.
+ * Crawls root storage, Documents/, Downloads/, Movies/, DCIM/, Pictures/, Editors, and all subdirectories.
  * 
  * @returns {Promise<Array<Object>>} List of fetched raw image objects
  */
@@ -172,7 +185,7 @@ export const scanImageFiles = async () => {
   await ensureImagePermission();
   const scannedFilesMap = new Map();
 
-  console.log('[ImageScanner] Starting Exhaustive Storage Traversal for Images (Documents, Download, DCIM, Pictures)...');
+  console.log('[ImageScanner] Starting Exhaustive Storage Traversal for Images (Documents, Download, Movies, DCIM, Pictures, Editors)...');
 
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
@@ -180,16 +193,16 @@ export const scanImageFiles = async () => {
     if (RNFS && typeof RNFS.readDir === 'function') {
       const rootStoragePath = RNFS.ExternalStorageDirectoryPath || '/storage/emulated/0';
 
-      // Step 1: Scan Root Storage (Covers Documents/, Download/, etc.)
+      // Step 1: Scan Root Storage (Covers Documents/, Download/, Movies/, etc.)
       try {
-        await scanDirectoryRecursive(RNFS, rootStoragePath, scannedFilesMap, 0, 8);
+        await scanDirectoryRecursive(RNFS, rootStoragePath, scannedFilesMap, 0, 10);
       } catch (rootErr) {
         console.warn('[ImageScanner] Root scan warning, proceeding to folder list scan:', rootErr);
       }
 
       // Step 2: Traverse Top-Level Folders for complete coverage
       for (const rootDir of IMAGE_STORAGE_PATHS) {
-        await scanDirectoryRecursive(RNFS, rootDir, scannedFilesMap, 0, 8);
+        await scanDirectoryRecursive(RNFS, rootDir, scannedFilesMap, 0, 10);
       }
     } else {
       console.warn('[ImageScanner] Native RNFS module unavailable on runtime platform.');

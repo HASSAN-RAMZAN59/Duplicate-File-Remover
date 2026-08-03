@@ -27,7 +27,7 @@ const getCleanBaseName = (filename = '') => {
   const lastDot = filename.lastIndexOf('.');
   const nameWithoutExt = lastDot !== -1 ? filename.substring(0, lastDot) : filename;
   return nameWithoutExt
-    .replace(/\s*\(\d+\)|_copy|-copy|_duplicate|\s+copy/gi, '')
+    .replace(/\s*\(\d+\)|_copy|-copy|_duplicate|_edit|_edited|\s+copy/gi, '')
     .toLowerCase()
     .trim();
 };
@@ -102,6 +102,8 @@ export const groupBySize = (fileList = []) => {
 
 /**
  * Step 2: Calculates duplicate groups from raw file list with 2-Level Duplicate Matching.
+ * Pushes ALL matching instances (N-copies across all folders) into a single unified array group.
+ * 
  * Level 1: 100% Exact Byte Size & Hash Match
  * Level 2: Similar Match (Matching Base Name Structure + Size Diff < 2KB)
  * 
@@ -158,6 +160,17 @@ export const calculateDuplicates = (rawFiles = []) => {
 
     for (const [hash, matchingFiles] of Object.entries(hashMap)) {
       if (matchingFiles.length > 1) {
+        // Sort items by creation/modification timestamp ascending (oldest first)
+        matchingFiles.sort((a, b) => {
+          const timeA = Number(a.modificationTime || a.dateModified || 0);
+          const timeB = Number(b.modificationTime || b.dateModified || 0);
+          if (timeA !== timeB && timeA > 0 && timeB > 0) {
+            return timeA - timeB;
+          }
+          return (a.path || '').localeCompare(b.path || '');
+        });
+
+        // Set oldest file as Original (Safe / Unchecked), all N remaining as Duplicate (Auto-Checked)
         const formattedFiles = matchingFiles.map((file, idx) => ({
           ...file,
           isOriginal: idx === 0,
@@ -166,6 +179,11 @@ export const calculateDuplicates = (rawFiles = []) => {
 
         const groupSize = Number(matchingFiles[0].size);
         const reclaimableBytes = groupSize * (matchingFiles.length - 1);
+        const pathsList = matchingFiles.map((f) => f.path).join(', ');
+
+        console.log(
+          `[HashEngine] Group MD5 [${hash.slice(0, 12)}]: Found 1 Original + ${matchingFiles.length - 1} Copies across paths: ${pathsList}`
+        );
 
         finalDuplicateGroups.push({
           groupId: `group_${groupCounter++}_${hash.slice(0, 12)}`,
@@ -207,6 +225,15 @@ export const calculateDuplicates = (rawFiles = []) => {
     }
 
     if (cluster.length > 1) {
+      cluster.sort((a, b) => {
+        const timeA = Number(a.modificationTime || a.dateModified || 0);
+        const timeB = Number(b.dateModified || b.modificationTime || 0);
+        if (timeA !== timeB && timeA > 0 && timeB > 0) {
+          return timeA - timeB;
+        }
+        return (a.path || '').localeCompare(b.path || '');
+      });
+
       const formattedFiles = cluster.map((file, idx) => ({
         ...file,
         isOriginal: idx === 0,
@@ -215,6 +242,11 @@ export const calculateDuplicates = (rawFiles = []) => {
 
       const groupSize = Number(cluster[0].size);
       const reclaimableBytes = groupSize * (cluster.length - 1);
+      const pathsList = cluster.map((f) => f.path).join(', ');
+
+      console.log(
+        `[HashEngine] Similar Group [${cleanName}]: Found 1 Original + ${cluster.length - 1} Copies across paths: ${pathsList}`
+      );
 
       finalDuplicateGroups.push({
         groupId: `group_${groupCounter++}_similar_${cleanName}`,
@@ -230,15 +262,7 @@ export const calculateDuplicates = (rawFiles = []) => {
     }
   }
 
-  // Step 3: Debug Console Output
   console.log(`[HashEngine] Step 3: Total Duplicate Groups Detected: ${finalDuplicateGroups.length}`);
-
-  if (totalRawCount > 0 && finalDuplicateGroups.length === 0) {
-    console.log('[HashEngine] Evaluated Files Summary (0 duplicate groups matched):');
-    rawFiles.slice(0, 10).forEach((f, idx) => {
-      console.log(`  File #${idx + 1}: Name="${f.name}", Size=${f.size} B, Path="${f.path}"`);
-    });
-  }
 
   return finalDuplicateGroups;
 };

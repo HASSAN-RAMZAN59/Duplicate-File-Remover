@@ -48,6 +48,9 @@ const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/Pictures/Telegram',
   '/storage/emulated/0/Pictures/Instagram',
   '/storage/emulated/0/Pictures/Facebook',
+  '/storage/emulated/0/Pictures/PhotoEditor',
+  '/storage/emulated/0/Pictures/PicsArt',
+  '/storage/emulated/0/Pictures/Snapseed',
   '/storage/emulated/0/Music',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Video',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
@@ -149,9 +152,9 @@ const isHiddenOrTrash = (name = '', path = '') => {
 
 /**
  * Recursive Directory Crawler
- * Scans directories and subfolders up to maxDepth (4 levels).
+ * Scans directories and subfolders up to maxDepth (10 levels).
  */
-const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, categoryType, depth = 0, maxDepth = 4) => {
+const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, categoryType, depth = 0, maxDepth = 10) => {
   if (depth > maxDepth) return;
 
   try {
@@ -187,6 +190,7 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
 
             // Avoid duplicate scan entries for same file path
             if (!scannedFilesMap.has(filePath) && fileSize > minSizeThreshold) {
+              const fileTimestamp = item.mtime ? new Date(item.mtime).getTime() : Date.now();
               scannedFilesMap.set(filePath, {
                 id: filePath,
                 name: item.name,
@@ -194,7 +198,8 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
                 size: fileSize,
                 extension: ext,
                 category: categoryType,
-                modificationTime: item.mtime ? new Date(item.mtime).getTime() : Date.now(),
+                dateModified: fileTimestamp,
+                modificationTime: fileTimestamp,
               });
             }
           }
@@ -213,7 +218,7 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
 
 /**
  * Main Real File Scanner Function
- * Fetches raw file metadata from device storage with active diagnostic console logs.
+ * Crawls root storage & key directories recursively for exhaustive file discovery.
  * 
  * @param {string} categoryType - 'Images' | 'Videos' | 'Audio' | 'Documents' | 'Others'
  * @returns {Promise<Array<Object>>} List of fetched raw file objects
@@ -230,8 +235,18 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
 
     if (RNFS && typeof RNFS.readDir === 'function') {
+      const rootStoragePath = RNFS.ExternalStorageDirectoryPath || '/storage/emulated/0';
+
+      // Step 1: Deep Root Traversal (maxDepth = 10)
+      try {
+        await scanDirectoryRecursive(RNFS, rootStoragePath, extList, scannedFilesMap, categoryType, 0, 10);
+      } catch (rootErr) {
+        console.warn('[FileScanner] Root storage scan warning:', rootErr);
+      }
+
+      // Step 2: Specific Root Folders Traversal
       for (const rootDir of STORAGE_ROOT_PATHS) {
-        await scanDirectoryRecursive(RNFS, rootDir, extList, scannedFilesMap, categoryType, 0, 4);
+        await scanDirectoryRecursive(RNFS, rootDir, extList, scannedFilesMap, categoryType, 0, 10);
       }
     } else {
       console.warn('[FileScanner] Native RNFS module unavailable on runtime platform.');
@@ -244,7 +259,6 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
   // Sort newest files first based on modificationTime
   rawFileList.sort((a, b) => (b.modificationTime || 0) - (a.modificationTime || 0));
 
-  // DIAGNOSTIC CONSOLE LOGS
   console.log(`[FileScanner] Total Raw ${categoryType} Fetched from Storage:`, rawFileList.length);
 
   return rawFileList;
