@@ -124,9 +124,8 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
 
   const rawFileList = Array.from(scannedFilesMap.values());
 
-  // MANDATORY DIAGNOSTIC CONSOLE LOGS
+  // DIAGNOSTIC CONSOLE LOGS
   console.log(`[FileScanner] Total Raw ${categoryType} Fetched:`, rawFileList.length);
-  console.log(`[FileScanner] Fetched File Paths:`, rawFileList.map((f) => f.path));
 
   return rawFileList;
 };
@@ -141,22 +140,38 @@ export const scanOthersCategory = async () => {
 
 /**
  * Deletes a file from physical device storage.
+ * Strips URI prefixes and notifies Android MediaStore to refresh.
+ * 
  * @param {string} filePath 
  * @returns {Promise<boolean>}
  */
 export const deleteFileFromDevice = async (filePath) => {
+  if (!filePath) return false;
+
+  // Clean file:// scheme prefix for raw Java File path
+  const cleanPath = filePath.startsWith('file://')
+    ? filePath.replace('file://', '')
+    : filePath;
+
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
     if (RNFS && typeof RNFS.unlink === 'function') {
-      await RNFS.unlink(filePath);
-      console.log('[FileScanner] Successfully unlinked file:', filePath);
+      await RNFS.unlink(cleanPath);
+      console.log('[FileScanner] Successfully deleted file from storage:', cleanPath);
+
+      // Refresh Android MediaStore Database so image disappears from Gallery
+      if (typeof RNFS.scanFile === 'function') {
+        try {
+          await RNFS.scanFile(cleanPath);
+        } catch (scanErr) {}
+      }
       return true;
     }
   } catch (error) {
-    console.warn('[FileScanner] Could not unlink file from storage:', filePath, error);
+    console.warn('[FileScanner] Could not unlink file from storage:', cleanPath, error);
     return false;
   }
-  return true;
+  return false;
 };
 
 export const fileScanner = {

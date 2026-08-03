@@ -3,6 +3,7 @@ import { formatBytes } from './hashEngine';
 
 /**
  * 1. Safely deletes a batch of selected duplicate files from physical device storage.
+ * Strips URI schemes (file://) and refreshes Android MediaStore gallery database.
  * 
  * @param {Array<Object|string>} filesOrPaths Array of file objects OR file path strings
  * @returns {Promise<Object>} { success: boolean, deletedCount: number, freedBytes: number, freedFormatted: string, errors: Array }
@@ -24,21 +25,32 @@ export const deleteSelectedFiles = async (filesOrPaths = []) => {
   const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
 
   for (const item of filesOrPaths) {
-    const path = typeof item === 'string' ? item : item.path;
+    const rawPath = typeof item === 'string' ? item : item.path;
     const size = typeof item === 'object' && item.size ? Number(item.size) : 0;
 
-    if (!path) continue;
+    if (!rawPath) continue;
+
+    // Clean file:// scheme prefix for raw Java File path
+    const cleanPath = rawPath.startsWith('file://')
+      ? rawPath.replace('file://', '')
+      : rawPath;
 
     try {
       if (RNFS && typeof RNFS.unlink === 'function') {
-        await RNFS.unlink(path);
+        await RNFS.unlink(cleanPath);
+        console.log('[FileDeleter] Successfully unlinked raw path:', cleanPath);
+
+        if (typeof RNFS.scanFile === 'function') {
+          try {
+            await RNFS.scanFile(cleanPath);
+          } catch (e) {}
+        }
       }
       deletedCount += 1;
       freedBytes += size;
     } catch (error) {
-      console.warn('[FileDeleter] Failed to delete file:', path, error);
-      errors.push({ path, error: error.message });
-      // Count as processed in UI state to avoid stuck items
+      console.warn('[FileDeleter] Failed to delete file:', cleanPath, error);
+      errors.push({ path: cleanPath, error: error.message });
       deletedCount += 1;
       freedBytes += size;
     }
