@@ -1,41 +1,91 @@
-import { Platform, NativeModules } from 'react-native';
+import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
 
 /**
- * File Extensions by Category
+ * Comprehensive File Extensions by Category
  */
 export const CATEGORY_EXTENSIONS = {
   IMAGES: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp', '.svg'],
-  VIDEOS: ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.3gp', '.webm'],
-  AUDIO: ['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.wma', '.opus'],
+  VIDEOS: ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.3gp', '.webm', '.m4v', '.ts', '.m2ts', '.mpg', '.mpeg', '.3g2', '.vob', '.divx'],
+  AUDIO: ['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.wma', '.opus', '.amr'],
   DOCUMENTS: ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.txt', '.csv', '.rtf'],
   OTHERS: ['.zip', '.rar', '.7z', '.apk', '.iso', '.dat', '.tmp', '.log', '.bak', '.db', '.bin'],
 };
 
 /**
- * Root Mobile Storage Directory Paths for Android & iOS
+ * Public Mobile Storage Directory Paths for Android & iOS
  */
 const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/DCIM',
   '/storage/emulated/0/DCIM/Camera',
+  '/storage/emulated/0/DCIM/Video',
   '/storage/emulated/0/DCIM/100ANDRO',
   '/storage/emulated/0/DCIM/Screenshots',
+  '/storage/emulated/0/DCIM/ScreenRecorder',
+  '/storage/emulated/0/Movies',
+  '/storage/emulated/0/Movies/Instagram',
+  '/storage/emulated/0/Movies/Facebook',
+  '/storage/emulated/0/Movies/CapCut',
+  '/storage/emulated/0/Movies/Screenrecords',
+  '/storage/emulated/0/Videos',
+  '/storage/emulated/0/Video',
+  '/storage/emulated/0/Download',
+  '/storage/emulated/0/Download/Video',
+  '/storage/emulated/0/Download/Telegram',
   '/storage/emulated/0/Pictures',
   '/storage/emulated/0/Pictures/Screenshots',
   '/storage/emulated/0/Pictures/Telegram',
   '/storage/emulated/0/Pictures/Instagram',
   '/storage/emulated/0/Pictures/Facebook',
-  '/storage/emulated/0/Download',
-  '/storage/emulated/0/Download/Telegram',
   '/storage/emulated/0/Music',
-  '/storage/emulated/0/Movies',
   '/storage/emulated/0/Documents',
-  '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Video',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
-  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
+  '/storage/emulated/0/Telegram/Telegram Video',
 ];
+
+/**
+ * Ensures Native Android Permission is Granted for Target Category
+ */
+const ensureCategoryPermission = async (categoryType) => {
+  if (Platform.OS !== 'android') return true;
+
+  try {
+    if (Platform.Version >= 33) {
+      const catUpper = categoryType.toUpperCase();
+      let targetPerm = PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES;
+      if (catUpper === 'VIDEOS') {
+        targetPerm = PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO;
+      } else if (catUpper === 'AUDIO') {
+        targetPerm = PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO;
+      }
+
+      const hasPerm = await PermissionsAndroid.check(targetPerm);
+      if (!hasPerm) {
+        const res = await PermissionsAndroid.request(targetPerm);
+        return res === PermissionsAndroid.RESULTS.GRANTED;
+      }
+      return true;
+    } else {
+      const hasPerm = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
+      );
+      if (!hasPerm) {
+        const res = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
+        );
+        return res === PermissionsAndroid.RESULTS.GRANTED;
+      }
+      return true;
+    }
+  } catch (err) {
+    console.warn('[FileScanner] Permission check error:', err);
+    return true;
+  }
+};
 
 /**
  * Helper to extract extension from filename
@@ -54,7 +104,6 @@ const isHiddenOrTrash = (name = '', path = '') => {
   const lowerPath = path.toLowerCase();
   if (
     lowerPath.includes('/.trash') ||
-    lowerPath.includes('/trash') ||
     lowerPath.includes('/.thumbnails') ||
     lowerPath.includes('/.cache') ||
     lowerPath.includes('/.pending') ||
@@ -67,9 +116,9 @@ const isHiddenOrTrash = (name = '', path = '') => {
 
 /**
  * Recursive Directory Crawler
- * Scans directories and subfolders up to maxDepth.
+ * Scans directories and subfolders up to maxDepth (4 levels).
  */
-const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, depth = 0, maxDepth = 2) => {
+const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, categoryType, depth = 0, maxDepth = 4) => {
   if (depth > maxDepth) return;
 
   try {
@@ -101,13 +150,14 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, d
                 path: filePath,
                 size: fileSize,
                 extension: ext,
+                category: categoryType,
                 modificationTime: item.mtime ? new Date(item.mtime).getTime() : Date.now(),
               });
             }
           }
         } else if (typeof item.isDirectory === 'function' ? item.isDirectory() : item.isDirectory) {
           // Recurse into subfolder
-          await scanDirectoryRecursive(RNFS, item.path, extList, scannedFilesMap, depth + 1, maxDepth);
+          await scanDirectoryRecursive(RNFS, item.path, extList, scannedFilesMap, categoryType, depth + 1, maxDepth);
         }
       } catch (err) {
         // Skip inaccessible item
@@ -130,12 +180,15 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
   const extList = CATEGORY_EXTENSIONS[normCategory] || [];
   const scannedFilesMap = new Map();
 
+  // Ensure category permission is active before scanning
+  await ensureCategoryPermission(categoryType);
+
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
 
     if (RNFS && typeof RNFS.readDir === 'function') {
       for (const rootDir of STORAGE_ROOT_PATHS) {
-        await scanDirectoryRecursive(RNFS, rootDir, extList, scannedFilesMap, 0, 2);
+        await scanDirectoryRecursive(RNFS, rootDir, extList, scannedFilesMap, categoryType, 0, 4);
       }
     } else {
       console.warn('[FileScanner] Native RNFS module unavailable on runtime platform.');
@@ -181,7 +234,7 @@ export const deleteFileFromDevice = async (filePath) => {
       await RNFS.unlink(cleanPath);
       console.log('[FileScanner] Successfully deleted file from storage:', cleanPath);
 
-      // Refresh Android MediaStore Database so image disappears from Gallery
+      // Refresh Android MediaStore Database so video disappears from Gallery
       if (typeof RNFS.scanFile === 'function') {
         try {
           await RNFS.scanFile(cleanPath);

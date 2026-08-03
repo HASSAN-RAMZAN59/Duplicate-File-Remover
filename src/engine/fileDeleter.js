@@ -38,26 +38,25 @@ export const deleteSelectedFiles = async (filesOrPaths = []) => {
     try {
       if (RNFS && typeof RNFS.unlink === 'function') {
         await RNFS.unlink(cleanPath);
-        console.log('[FileDeleter] Successfully unlinked raw path:', cleanPath);
+        console.log('[FileDeleter] Successfully unlinked raw path from physical storage:', cleanPath);
 
+        // Notify MediaStore to update system gallery database
         if (typeof RNFS.scanFile === 'function') {
           try {
             await RNFS.scanFile(cleanPath);
           } catch (e) {}
         }
+        deletedCount += 1;
+        freedBytes += size;
       }
-      deletedCount += 1;
-      freedBytes += size;
     } catch (error) {
-      console.warn('[FileDeleter] Failed to delete file:', cleanPath, error);
+      console.warn('[FileDeleter] Failed to delete file from device:', cleanPath, error);
       errors.push({ path: cleanPath, error: error.message });
-      deletedCount += 1;
-      freedBytes += size;
     }
   }
 
   return {
-    success: errors.length === 0,
+    success: errors.length === 0 && deletedCount > 0,
     deletedCount,
     freedBytes,
     freedFormatted: formatBytes(freedBytes),
@@ -94,19 +93,17 @@ export const deleteSelectedContacts = async (contactsOrIds = []) => {
     try {
       if (ContactsNative && typeof ContactsNative.deleteContact === 'function') {
         await ContactsNative.deleteContact(contactData);
+        deletedCount += 1;
+        freedBytes += 1024;
       }
-      deletedCount += 1;
-      freedBytes += 1024; // Nominal 1 KB per contact record
     } catch (error) {
-      console.warn('[FileDeleter] Failed to delete contact:', recordID, error);
+      console.warn('[FileDeleter] Failed to delete contact from phonebook:', recordID, error);
       errors.push({ recordID, error: error.message });
-      deletedCount += 1;
-      freedBytes += 1024;
     }
   }
 
   return {
-    success: errors.length === 0,
+    success: errors.length === 0 && deletedCount > 0,
     deletedCount,
     freedBytes,
     freedFormatted: formatBytes(freedBytes),

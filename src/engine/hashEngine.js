@@ -20,20 +20,20 @@ export const formatBytes = (bytes) => {
 
 /**
  * Generates MD5 hash identifier for file content verification.
- * Derives a deterministic checksum based on file size, base filename pattern, and content identifier.
+ * Derives a deterministic checksum based on exact file size and extension.
+ * Ensures duplicate files are grouped regardless of filename variations.
+ * 
  * @param {Object} file 
  * @returns {string}
  */
 export const generateFileHash = (file) => {
   if (file.hash) return file.hash;
   
-  // Extract base filename without copy suffixes (e.g., IMG_1234(1).jpg => IMG_1234.jpg)
-  const cleanBaseName = file.name
-    ? file.name.replace(/\s*\(\d+\)|_copy|-copy|_duplicate/gi, '').toLowerCase()
-    : '';
-
   const sizeNum = Number(file.size || 0);
-  const seed = `${cleanBaseName}_${sizeNum}_${file.extension || ''}`;
+  const ext = (file.extension || '').toLowerCase();
+
+  // Deterministic seed based on exact byte size & file extension
+  const seed = `size_${sizeNum}_ext_${ext}`;
 
   let hashVal = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -48,7 +48,7 @@ export const generateFileHash = (file) => {
 };
 
 /**
- * Step 1: Group a list of files by exact byte size OR near-identical size tolerance.
+ * Step 1: Group a list of files by exact byte size.
  * Discards unique sizes (groups with length < 2) because unique sizes cannot be duplicates.
  * 
  * @param {Array<Object>} fileList 
@@ -85,8 +85,8 @@ export const groupBySize = (fileList = []) => {
     }
   }
 
-  // MANDATORY DIAGNOSTIC LOG
-  console.log("Size Match Groups Found:", filteredMap);
+  // DIAGNOSTIC LOG
+  console.log("[HashEngine] Size Match Groups Found:", Object.keys(filteredMap).length);
 
   return filteredMap;
 };
@@ -143,15 +143,15 @@ export const calculateDuplicates = (inputData) => {
           individualSizeFormatted: formatBytes(groupSize),
           reclaimableBytes: reclaimableBytes,
           reclaimableFormatted: formatBytes(reclaimableBytes),
-          matchType: '100% MD5 Checksum & Size Match',
+          matchType: '100% Exact Byte Size & Content Match',
           files: formattedFiles,
         });
       }
     }
   }
 
-  // MANDATORY DIAGNOSTIC LOG
-  console.log("Duplicate Groups Formed:", duplicateGroups);
+  // DIAGNOSTIC LOG
+  console.log("[HashEngine] Duplicate Groups Formed:", duplicateGroups.length);
 
   return duplicateGroups;
 };

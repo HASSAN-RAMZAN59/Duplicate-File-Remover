@@ -37,30 +37,39 @@ const normalizeStatus = (result) => {
   }
 };
 
+const isGrantedOrLimited = (res) =>
+  res === RESULTS.GRANTED || res === RESULTS.LIMITED;
+
 export const permissionService = {
   /**
-   * Check status of storage permission (Images, Videos, Audio)
+   * Check status of storage permission with full Old & New Android version support.
+   * Android 13+ (API 33+): READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO
+   * Android 6 - 12 (API <= 32): READ_EXTERNAL_STORAGE
    */
   checkPermission: async (type) => {
     try {
       if (type === PERMISSION_TYPES.STORAGE) {
         if (Platform.OS === 'android') {
           if (Platform.Version >= 33) {
-            const [imgRes, vidRes, audRes] = await Promise.all([
+            const [imgRes, vidRes, audRes, legacyRes] = await Promise.all([
               check(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES),
               check(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO),
               check(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO),
+              check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE),
             ]);
 
             const isAnyGranted =
-              imgRes === RESULTS.GRANTED ||
-              vidRes === RESULTS.GRANTED ||
-              audRes === RESULTS.GRANTED;
+              isGrantedOrLimited(imgRes) ||
+              isGrantedOrLimited(vidRes) ||
+              isGrantedOrLimited(audRes) ||
+              isGrantedOrLimited(legacyRes);
 
             return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+          } else {
+            // Legacy Android 6 to 12 (API <= 32)
+            const res = await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+            return normalizeStatus(res);
           }
-          const res = await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-          return normalizeStatus(res);
         } else if (Platform.OS === 'ios') {
           const res = await check(PERMISSIONS.IOS.PHOTO_LIBRARY);
           return normalizeStatus(res);
@@ -85,14 +94,14 @@ export const permissionService = {
   },
 
   /**
-   * Request system storage & media permissions explicitly (Images, Videos, Audio)
+   * Request storage & media permissions with full Old & New Android version support.
    */
   requestPermission: async (type) => {
     try {
       if (type === PERMISSION_TYPES.STORAGE) {
         if (Platform.OS === 'android') {
           if (Platform.Version >= 33) {
-            // Request ALL 3 media permissions on Android 13+ (Images, Videos, Audio)
+            // Android 13, 14, 15 (API 33+)
             const [imgRes, vidRes, audRes] = await Promise.all([
               request(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES),
               request(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO),
@@ -100,14 +109,16 @@ export const permissionService = {
             ]);
 
             const isAnyGranted =
-              imgRes === RESULTS.GRANTED ||
-              vidRes === RESULTS.GRANTED ||
-              audRes === RESULTS.GRANTED;
+              isGrantedOrLimited(imgRes) ||
+              isGrantedOrLimited(vidRes) ||
+              isGrantedOrLimited(audRes);
 
             return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+          } else {
+            // Legacy Android 6 to 12 (API <= 32)
+            const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+            return normalizeStatus(res);
           }
-          const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-          return normalizeStatus(res);
         } else if (Platform.OS === 'ios') {
           const res = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
           return normalizeStatus(res);
@@ -119,7 +130,7 @@ export const permissionService = {
           const res = await request(PERMISSIONS.ANDROID.READ_CONTACTS);
           return normalizeStatus(res);
         } else if (Platform.OS === 'ios') {
-          const res = await request(PERMISSIONS.IOS.CONTACTS);
+          const res = await check(PERMISSIONS.IOS.CONTACTS);
           return normalizeStatus(res);
         }
       }

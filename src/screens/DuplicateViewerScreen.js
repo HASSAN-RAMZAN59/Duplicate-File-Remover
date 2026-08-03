@@ -73,6 +73,33 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     };
   }, [categoryType]);
 
+  // Handle single file deletion sync when returning from FileDetailScreen
+  useEffect(() => {
+    if (route.params?.deletedFilePath) {
+      const deletedPath = route.params.deletedFilePath;
+      const deletedId = route.params.deletedFileId;
+
+      setDuplicateGroups((prevGroups) => {
+        const updatedGroups = prevGroups
+          .map((group) => {
+            const remainingFiles = group.files.filter(
+              (f) => f.path !== deletedPath && f.id !== deletedId
+            );
+            return {
+              ...group,
+              files: remainingFiles,
+              fileCount: remainingFiles.length,
+            };
+          })
+          .filter((group) => group.files.length > 1);
+
+        return updatedGroups;
+      });
+
+      navigation.setParams({ deletedFilePath: undefined, deletedFileId: undefined });
+    }
+  }, [route.params?.deletedFilePath, route.params?.deletedFileId]);
+
   // 2. Computed Metrics (Selected items count & total bytes selected for deletion)
   const selectionSummary = useMemo(() => {
     let selectedCount = 0;
@@ -252,29 +279,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                 file.isOriginal && styles.originalFileItem,
                 file.selected && styles.selectedFileItem,
               ]}
-              onPress={() =>
-                navigation.navigate(ROUTES.FILE_DETAIL, {
-                  file,
-                  onFileDeleted: (deletedPath) => {
-                    setDuplicateGroups((prevGroups) => {
-                      const updatedGroups = prevGroups
-                        .map((group) => {
-                          const remainingFiles = group.files.filter(
-                            (f) => f.path !== deletedPath && f.id !== file.id
-                          );
-                          return {
-                            ...group,
-                            files: remainingFiles,
-                            fileCount: remainingFiles.length,
-                          };
-                        })
-                        .filter((group) => group.files.length > 1);
-
-                      return updatedGroups;
-                    });
-                  },
-                })
-              }
+              onPress={() => navigation.navigate(ROUTES.FILE_DETAIL, { file })}
               activeOpacity={0.8}
             >
               {/* Checkbox / Badge */}
