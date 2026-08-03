@@ -16,13 +16,23 @@ export const CATEGORY_EXTENSIONS = {
  */
 const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/DCIM',
+  '/storage/emulated/0/DCIM/Camera',
+  '/storage/emulated/0/DCIM/100ANDRO',
+  '/storage/emulated/0/DCIM/Screenshots',
   '/storage/emulated/0/Pictures',
+  '/storage/emulated/0/Pictures/Screenshots',
+  '/storage/emulated/0/Pictures/Telegram',
+  '/storage/emulated/0/Pictures/Instagram',
+  '/storage/emulated/0/Pictures/Facebook',
   '/storage/emulated/0/Download',
+  '/storage/emulated/0/Download/Telegram',
   '/storage/emulated/0/Music',
   '/storage/emulated/0/Movies',
   '/storage/emulated/0/Documents',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Video',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video',
 ];
@@ -77,13 +87,15 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, d
         if (isFile) {
           const ext = getExtension(item.name);
           if (extList.length === 0 || extList.includes(ext)) {
-            const filePath = item.path;
+            const rawPath = item.path || '';
+            const filePath = rawPath.startsWith('/sdcard/')
+              ? rawPath.replace('/sdcard/', '/storage/emulated/0/')
+              : rawPath;
             const fileSize = Number(item.size || 0);
-            const normPath = filePath.toLowerCase().replace(/^file:\/\//, '');
 
             // Avoid duplicate scan entries for same file path
-            if (!scannedFilesMap.has(normPath) && fileSize > 0) {
-              scannedFilesMap.set(normPath, {
+            if (!scannedFilesMap.has(filePath) && fileSize > 0) {
+              scannedFilesMap.set(filePath, {
                 id: filePath,
                 name: item.name,
                 path: filePath,
