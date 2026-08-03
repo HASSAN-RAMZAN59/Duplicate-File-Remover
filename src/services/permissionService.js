@@ -20,33 +20,6 @@ export const PERMISSION_STATUS = {
 };
 
 /**
- * Maps cross-platform request to specific OS native permission keys.
- */
-const getPlatformPermissionKey = (type) => {
-  if (type === PERMISSION_TYPES.STORAGE) {
-    if (Platform.OS === 'android') {
-      // Android 13+ uses READ_MEDIA_IMAGES / READ_MEDIA_VIDEO, fallback to READ_EXTERNAL_STORAGE
-      if (Platform.Version >= 33) {
-        return PERMISSIONS.ANDROID.READ_MEDIA_IMAGES;
-      }
-      return PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE;
-    } else if (Platform.OS === 'ios') {
-      return PERMISSIONS.IOS.PHOTO_LIBRARY;
-    }
-  }
-
-  if (type === PERMISSION_TYPES.CONTACTS) {
-    if (Platform.OS === 'android') {
-      return PERMISSIONS.ANDROID.READ_CONTACTS;
-    } else if (Platform.OS === 'ios') {
-      return PERMISSIONS.IOS.CONTACTS;
-    }
-  }
-
-  return null;
-};
-
-/**
  * Normalizes library status string to internal PERMISSION_STATUS enum.
  */
 const normalizeStatus = (result) => {
@@ -66,17 +39,45 @@ const normalizeStatus = (result) => {
 
 export const permissionService = {
   /**
-   * Check status of a single permission
+   * Check status of storage permission (Images, Videos, Audio)
    */
   checkPermission: async (type) => {
     try {
-      const permissionKey = getPlatformPermissionKey(type);
-      if (!permissionKey) {
-        // Fallback status if outside mobile runtime environment
-        return PERMISSION_STATUS.DENIED;
+      if (type === PERMISSION_TYPES.STORAGE) {
+        if (Platform.OS === 'android') {
+          if (Platform.Version >= 33) {
+            const [imgRes, vidRes, audRes] = await Promise.all([
+              check(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES),
+              check(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO),
+              check(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO),
+            ]);
+
+            const isAnyGranted =
+              imgRes === RESULTS.GRANTED ||
+              vidRes === RESULTS.GRANTED ||
+              audRes === RESULTS.GRANTED;
+
+            return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+          }
+          const res = await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+          return normalizeStatus(res);
+        } else if (Platform.OS === 'ios') {
+          const res = await check(PERMISSIONS.IOS.PHOTO_LIBRARY);
+          return normalizeStatus(res);
+        }
       }
-      const res = await check(permissionKey);
-      return normalizeStatus(res);
+
+      if (type === PERMISSION_TYPES.CONTACTS) {
+        if (Platform.OS === 'android') {
+          const res = await check(PERMISSIONS.ANDROID.READ_CONTACTS);
+          return normalizeStatus(res);
+        } else if (Platform.OS === 'ios') {
+          const res = await check(PERMISSIONS.IOS.CONTACTS);
+          return normalizeStatus(res);
+        }
+      }
+
+      return PERMISSION_STATUS.DENIED;
     } catch (error) {
       console.warn(`[PermissionService] Check failed for ${type}:`, error);
       return PERMISSION_STATUS.DENIED;
@@ -84,16 +85,46 @@ export const permissionService = {
   },
 
   /**
-   * Request system permission explicitly
+   * Request system storage & media permissions explicitly (Images, Videos, Audio)
    */
   requestPermission: async (type) => {
     try {
-      const permissionKey = getPlatformPermissionKey(type);
-      if (!permissionKey) {
-        return PERMISSION_STATUS.DENIED;
+      if (type === PERMISSION_TYPES.STORAGE) {
+        if (Platform.OS === 'android') {
+          if (Platform.Version >= 33) {
+            // Request ALL 3 media permissions on Android 13+ (Images, Videos, Audio)
+            const [imgRes, vidRes, audRes] = await Promise.all([
+              request(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES),
+              request(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO),
+              request(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO),
+            ]);
+
+            const isAnyGranted =
+              imgRes === RESULTS.GRANTED ||
+              vidRes === RESULTS.GRANTED ||
+              audRes === RESULTS.GRANTED;
+
+            return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+          }
+          const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+          return normalizeStatus(res);
+        } else if (Platform.OS === 'ios') {
+          const res = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
+          return normalizeStatus(res);
+        }
       }
-      const res = await request(permissionKey);
-      return normalizeStatus(res);
+
+      if (type === PERMISSION_TYPES.CONTACTS) {
+        if (Platform.OS === 'android') {
+          const res = await request(PERMISSIONS.ANDROID.READ_CONTACTS);
+          return normalizeStatus(res);
+        } else if (Platform.OS === 'ios') {
+          const res = await request(PERMISSIONS.IOS.CONTACTS);
+          return normalizeStatus(res);
+        }
+      }
+
+      return PERMISSION_STATUS.DENIED;
     } catch (error) {
       console.warn(`[PermissionService] Request failed for ${type}:`, error);
       return PERMISSION_STATUS.DENIED;
