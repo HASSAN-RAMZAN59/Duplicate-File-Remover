@@ -8,8 +8,10 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { COLORS } from '../constants/colors';
+import { ROUTES } from '../navigation/routes';
 import { scanCategoryFiles } from '../engine/fileScanner';
 import { scanContactDuplicates } from '../engine/contactScanner';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
@@ -32,9 +34,21 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
         let groups = [];
         if (categoryType.toUpperCase() === 'CONTACTS') {
           groups = await scanContactDuplicates();
+          console.log(`[DuplicateViewer] Contacts Scan Result:`, { duplicateGroupsCount: groups.length });
         } else {
           const rawFiles = await scanCategoryFiles(categoryType);
           groups = calculateDuplicates(rawFiles);
+
+          console.log(`[DuplicateViewer] Scanning Result for ${categoryType}:`, {
+            rawCount: rawFiles.length,
+            duplicateGroupsCount: groups.length,
+          });
+
+          if (rawFiles.length > 0 && groups.length === 0) {
+            console.warn(
+              `[DuplicateViewer] Raw files were fetched (${rawFiles.length}), but 0 duplicate groups were matched!`
+            );
+          }
         }
 
         if (isMounted) {
@@ -212,44 +226,83 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
         <View style={styles.divider} />
 
         {/* List of Files in Group */}
-        {group.files.map((file) => (
-          <TouchableOpacity
-            key={file.id}
-            style={[
-              styles.fileItem,
-              file.isOriginal && styles.originalFileItem,
-              file.selected && styles.selectedFileItem,
-            ]}
-            onPress={() => !file.isOriginal && handleToggleFileSelection(group.groupId, file.id)}
-            activeOpacity={0.8}
-          >
-            {/* Checkbox / Badge */}
-            <View style={styles.checkboxContainer}>
-              {file.isOriginal ? (
-                <View style={styles.originalBadge}>
-                  <Text style={styles.originalBadgeText}>SAFE ORIGINAL</Text>
-                </View>
-              ) : (
-                <View style={[styles.checkbox, file.selected && styles.checkboxChecked]}>
-                  {file.selected && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-              )}
-            </View>
+        {group.files.map((file) => {
+          const isImageFile =
+            categoryType.toUpperCase() === 'IMAGES' ||
+            ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic'].some((ext) =>
+              file.name?.toLowerCase().endsWith(ext)
+            );
 
-            {/* File Info */}
-            <View style={styles.fileDetails}>
-              <Text style={styles.fileName} numberOfLines={1} ellipsisMode="middle">
-                {file.name}
-              </Text>
-              <Text style={styles.filePath} numberOfLines={1} ellipsisMode="middle">
-                {file.path}
-              </Text>
-            </View>
+          const isVideoFile =
+            categoryType.toUpperCase() === 'VIDEOS' ||
+            ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.3gp'].some((ext) =>
+              file.name?.toLowerCase().endsWith(ext)
+            );
 
-            {/* File Size */}
-            <Text style={styles.fileSize}>{formatBytes(file.size)}</Text>
-          </TouchableOpacity>
-        ))}
+          const fileUri =
+            file.path && (file.path.startsWith('file://') || file.path.startsWith('content://'))
+              ? file.path
+              : `file://${file.path}`;
+
+          return (
+            <TouchableOpacity
+              key={file.id}
+              style={[
+                styles.fileItem,
+                file.isOriginal && styles.originalFileItem,
+                file.selected && styles.selectedFileItem,
+              ]}
+              onPress={() => navigation.navigate(ROUTES.FILE_DETAIL, { file })}
+              activeOpacity={0.8}
+            >
+              {/* Checkbox / Badge */}
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => !file.isOriginal && handleToggleFileSelection(group.groupId, file.id)}
+                activeOpacity={0.7}
+              >
+                {file.isOriginal ? (
+                  <View style={styles.originalBadge}>
+                    <Text style={styles.originalBadgeText}>SAFE ORIGINAL</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.checkbox, file.selected && styles.checkboxChecked]}>
+                    {file.selected && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Thumbnail Preview for Images & Videos */}
+              {(isImageFile || isVideoFile) && file.path && !file.path.startsWith('Phone:') ? (
+                <View style={styles.thumbnailWrapper}>
+                  <Image
+                    source={{ uri: fileUri }}
+                    style={styles.thumbnailImage}
+                    resizeMode="cover"
+                  />
+                  {isVideoFile && (
+                    <View style={styles.videoOverlayBadge}>
+                      <Text style={styles.videoOverlayIcon}>▶</Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              {/* File Info */}
+              <View style={styles.fileDetails}>
+                <Text style={styles.fileName} numberOfLines={1} ellipsisMode="middle">
+                  {file.name}
+                </Text>
+                <Text style={styles.filePath} numberOfLines={1} ellipsisMode="middle">
+                  {file.path}
+                </Text>
+              </View>
+
+              {/* File Size */}
+              <Text style={styles.fileSize}>{formatBytes(file.size)}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -482,6 +535,36 @@ const styles = StyleSheet.create({
   },
   checkboxContainer: {
     marginRight: 10,
+  },
+  thumbnailWrapper: {
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: COLORS.cardBackground || '#1E293B',
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder || '#334155',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  videoOverlayBadge: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoOverlayIcon: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    marginLeft: 1,
   },
   originalBadge: {
     backgroundColor: '#10B981',

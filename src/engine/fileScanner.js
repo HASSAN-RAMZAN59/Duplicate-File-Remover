@@ -12,15 +12,20 @@ export const CATEGORY_EXTENSIONS = {
 };
 
 /**
- * Standard Storage Root Directories on Mobile Devices
+ * Root Mobile Storage Directory Paths for Android & iOS
  */
-const STORAGE_PATHS = [
+const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/DCIM',
   '/storage/emulated/0/DCIM/Camera',
-  '/storage/emulated/0/Download',
+  '/storage/emulated/0/DCIM/100ANDRO',
+  '/storage/emulated/0/DCIM/Screenshots',
   '/storage/emulated/0/Pictures',
   '/storage/emulated/0/Pictures/Screenshots',
   '/storage/emulated/0/Pictures/Telegram',
+  '/storage/emulated/0/Pictures/Instagram',
+  '/storage/emulated/0/Pictures/Facebook',
+  '/storage/emulated/0/Download',
+  '/storage/emulated/0/Download/Telegram',
   '/storage/emulated/0/Music',
   '/storage/emulated/0/Movies',
   '/storage/emulated/0/Documents',
@@ -30,6 +35,10 @@ const STORAGE_PATHS = [
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video',
+  '/sdcard/DCIM',
+  '/sdcard/DCIM/Camera',
+  '/sdcard/Pictures',
+  '/sdcard/Download',
 ];
 
 /**
@@ -42,61 +51,88 @@ const getExtension = (filename = '') => {
 };
 
 /**
+ * Recursive Directory Crawler
+ * Scans directories and subfolders up to maxDepth.
+ */
+const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, depth = 0, maxDepth = 2) => {
+  if (depth > maxDepth) return;
+
+  try {
+    const items = await RNFS.readDir(dirPath);
+    if (!Array.isArray(items)) return;
+
+    for (const item of items) {
+      try {
+        const isFile = typeof item.isFile === 'function' ? item.isFile() : !item.isDirectory;
+
+        if (isFile) {
+          const ext = getExtension(item.name);
+          if (extList.length === 0 || extList.includes(ext)) {
+            const filePath = item.path;
+            const fileSize = Number(item.size || 0);
+
+            // Avoid duplicate scan entries for same file path
+            if (!scannedFilesMap.has(filePath) && fileSize > 0) {
+              scannedFilesMap.set(filePath, {
+                id: filePath,
+                name: item.name,
+                path: filePath,
+                size: fileSize,
+                extension: ext,
+                modificationTime: item.mtime ? new Date(item.mtime).getTime() : Date.now(),
+              });
+            }
+          }
+        } else if (typeof item.isDirectory === 'function' ? item.isDirectory() : item.isDirectory) {
+          // Recurse into subfolder
+          await scanDirectoryRecursive(RNFS, item.path, extList, scannedFilesMap, depth + 1, maxDepth);
+        }
+      } catch (err) {
+        // Skip inaccessible item
+      }
+    }
+  } catch (e) {
+    // Skip missing directory
+  }
+};
+
+/**
  * Main Real File Scanner Function
- * Scans physical device storage directories for actual files.
- * Returns ONLY real files found on the user's device. No mock or dummy data.
+ * Fetches raw file metadata from device storage with active diagnostic console logs.
  * 
  * @param {string} categoryType - 'Images' | 'Videos' | 'Audio' | 'Documents' | 'Others'
- * @returns {Promise<Array<Object>>} Real scanned file metadata objects
+ * @returns {Promise<Array<Object>>} List of fetched raw file objects
  */
 export const scanCategoryFiles = async (categoryType = 'Images') => {
-  const scannedFiles = [];
   const normCategory = categoryType ? categoryType.toUpperCase() : 'IMAGES';
   const extList = CATEGORY_EXTENSIONS[normCategory] || [];
+  const scannedFilesMap = new Map();
 
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
 
     if (RNFS && typeof RNFS.readDir === 'function') {
-      for (const dirPath of STORAGE_PATHS) {
-        try {
-          const items = await RNFS.readDir(dirPath);
-          if (Array.isArray(items)) {
-            for (const item of items) {
-              if (typeof item.isFile === 'function' ? item.isFile() : !item.isDirectory) {
-                const ext = getExtension(item.name);
-                if (extList.length === 0 || extList.includes(ext)) {
-                  scannedFiles.push({
-                    id: item.path || `file_${item.name}_${item.size}`,
-                    name: item.name,
-                    path: item.path,
-                    size: Number(item.size || 0),
-                    category: categoryType,
-                    extension: ext,
-                    modificationTime: item.mtime ? new Date(item.mtime).getTime() : Date.now(),
-                  });
-                }
-              }
-            }
-          }
-        } catch (e) {
-          // Skip inaccessible or non-existent directories on specific device models
-        }
+      for (const rootDir of STORAGE_ROOT_PATHS) {
+        await scanDirectoryRecursive(RNFS, rootDir, extList, scannedFilesMap, 0, 2);
       }
+    } else {
+      console.warn('[FileScanner] Native RNFS module unavailable on runtime platform.');
     }
   } catch (error) {
-    console.warn('[FileScanner] Native storage read error:', error);
+    console.error('[FileScanner] Critical error during storage scan:', error);
   }
 
-  // Artificial small delay for UI transition smoothness
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  const rawFileList = Array.from(scannedFilesMap.values());
 
-  return scannedFiles;
+  // MANDATORY DIAGNOSTIC CONSOLE LOGS
+  console.log(`[FileScanner] Total Raw ${categoryType} Fetched:`, rawFileList.length);
+  console.log(`[FileScanner] Fetched File Paths:`, rawFileList.map((f) => f.path));
+
+  return rawFileList;
 };
 
 /**
  * Separate Scanner for 'Others' Category
- * Scans archive, APK, log, and cache files across download and app cache folders.
  * @returns {Promise<Array<Object>>}
  */
 export const scanOthersCategory = async () => {
@@ -104,7 +140,7 @@ export const scanOthersCategory = async () => {
 };
 
 /**
- * Deletes a real file from physical device storage.
+ * Deletes a file from physical device storage.
  * @param {string} filePath 
  * @returns {Promise<boolean>}
  */
@@ -113,6 +149,7 @@ export const deleteFileFromDevice = async (filePath) => {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
     if (RNFS && typeof RNFS.unlink === 'function') {
       await RNFS.unlink(filePath);
+      console.log('[FileScanner] Successfully unlinked file:', filePath);
       return true;
     }
   } catch (error) {

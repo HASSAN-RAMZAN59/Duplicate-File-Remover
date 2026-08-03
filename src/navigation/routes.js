@@ -9,4 +9,5 @@ export const ROUTES = {
   HELP: 'Help',
   PRIVACY_POLICY: 'PrivacyPolicy',
   DUPLICATE_VIEWER: 'DuplicateViewer',
+  FILE_DETAIL: 'FileDetail',
 };
