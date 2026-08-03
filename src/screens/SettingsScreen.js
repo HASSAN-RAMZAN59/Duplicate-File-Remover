@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,39 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
+  ToastAndroid,
+  Platform,
 } from 'react-native';
 import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
+import { loadSettings, updateSetting, DEFAULT_SETTINGS } from '../services/settingsService';
 
 export const SettingsScreen = ({ navigation }) => {
-  const [autoScan, setAutoScan] = useState(true);
-  const [notifyDuplicates, setNotifyDuplicates] = useState(true);
-  const [ignoreSmallFiles, setIgnoreSmallFiles] = useState(false);
-  const [smartMatching, setSmartMatching] = useState(true);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSettings = async () => {
+      const active = await loadSettings();
+      if (isMounted) {
+        setSettings(active);
+        setIsLoaded(true);
+      }
+    };
+    fetchSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggle = async (key, value) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+    await updateSetting(key, value);
+    if (Platform.OS === 'android' && ToastAndroid) {
+      ToastAndroid.show(`Setting updated: ${key} = ${value ? 'ON' : 'OFF'}`, ToastAndroid.SHORT);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -43,10 +67,11 @@ export const SettingsScreen = ({ navigation }) => {
               <Text style={styles.settingDesc}>Periodically check storage for new duplicates</Text>
             </View>
             <Switch
-              value={autoScan}
-              onValueChange={setAutoScan}
+              value={settings.autoScan}
+              onValueChange={(val) => handleToggle('autoScan', val)}
               trackColor={{ false: '#334155', true: COLORS.primary }}
               thumbColor={COLORS.white}
+              disabled={!isLoaded}
             />
           </View>
 
@@ -54,14 +79,15 @@ export const SettingsScreen = ({ navigation }) => {
 
           <View style={styles.settingRow}>
             <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>Smart Content Matching</Text>
-              <Text style={styles.settingDesc}>Use MD5 checksums for 100% duplicate accuracy</Text>
+              <Text style={styles.settingTitle}>Smart Content Matching (MD5)</Text>
+              <Text style={styles.settingDesc}>Use MD5 checksums & dimensions for 100% duplicate accuracy</Text>
             </View>
             <Switch
-              value={smartMatching}
-              onValueChange={setSmartMatching}
+              value={settings.smartMatching}
+              onValueChange={(val) => handleToggle('smartMatching', val)}
               trackColor={{ false: '#334155', true: COLORS.primary }}
               thumbColor={COLORS.white}
+              disabled={!isLoaded}
             />
           </View>
 
@@ -70,18 +96,19 @@ export const SettingsScreen = ({ navigation }) => {
           <View style={styles.settingRow}>
             <View style={styles.settingTextGroup}>
               <Text style={styles.settingTitle}>Ignore Files Under 100 KB</Text>
-              <Text style={styles.settingDesc}>Skip small thumbnails & tiny cache items</Text>
+              <Text style={styles.settingDesc}>Skip small thumbnails & tiny cache items (&lt;100 KB)</Text>
             </View>
             <Switch
-              value={ignoreSmallFiles}
-              onValueChange={setIgnoreSmallFiles}
+              value={settings.ignoreSmallFiles}
+              onValueChange={(val) => handleToggle('ignoreSmallFiles', val)}
               trackColor={{ false: '#334155', true: COLORS.primary }}
               thumbColor={COLORS.white}
+              disabled={!isLoaded}
             />
           </View>
         </View>
 
-        <Text style={styles.sectionHeader}>Notifications & Alerts</Text>
+        <Text style={styles.sectionHeader}>Notifications & Selection Rules</Text>
         <View style={styles.settingCard}>
           <View style={styles.settingRow}>
             <View style={styles.settingTextGroup}>
@@ -89,10 +116,27 @@ export const SettingsScreen = ({ navigation }) => {
               <Text style={styles.settingDesc}>Notify when duplicate files exceed 1 GB</Text>
             </View>
             <Switch
-              value={notifyDuplicates}
-              onValueChange={setNotifyDuplicates}
+              value={settings.notifyDuplicates}
+              onValueChange={(val) => handleToggle('notifyDuplicates', val)}
               trackColor={{ false: '#334155', true: COLORS.primary }}
               thumbColor={COLORS.white}
+              disabled={!isLoaded}
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingTextGroup}>
+              <Text style={styles.settingTitle}>Auto-Select Oldest File as Safe</Text>
+              <Text style={styles.settingDesc}>Always keep oldest created file safe (unchecked)</Text>
+            </View>
+            <Switch
+              value={settings.autoSelectOldest}
+              onValueChange={(val) => handleToggle('autoSelectOldest', val)}
+              trackColor={{ false: '#334155', true: COLORS.primary }}
+              thumbColor={COLORS.white}
+              disabled={!isLoaded}
             />
           </View>
         </View>

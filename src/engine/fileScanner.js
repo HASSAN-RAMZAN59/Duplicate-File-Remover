@@ -1,4 +1,5 @@
 import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
+import { getActiveSettings } from '../services/settingsService';
 
 /**
  * Comprehensive File Extensions by Category
@@ -181,9 +182,11 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
               : rawPath;
 
             const fileSize = Number(item.size || 0);
+            const settings = getActiveSettings();
+            const minSizeThreshold = settings && settings.ignoreSmallFiles ? 102400 : 0;
 
             // Avoid duplicate scan entries for same file path
-            if (!scannedFilesMap.has(filePath) && fileSize > 0) {
+            if (!scannedFilesMap.has(filePath) && fileSize > minSizeThreshold) {
               scannedFilesMap.set(filePath, {
                 id: filePath,
                 name: item.name,

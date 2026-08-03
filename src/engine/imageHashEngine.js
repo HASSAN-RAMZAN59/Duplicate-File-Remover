@@ -179,6 +179,38 @@ export const calculateImageDuplicates = async (rawImages = []) => {
 
       // Only create group if at least 2 files pass all 3 verification steps
       if (verifiedFiles.length > 1) {
+        // Chronological Sorting & Path Priority:
+        // Rule: The OLDEST file (lowest dateModified timestamp) MUST BE set as Original (Unchecked).
+        // Rule: All NEWER files (higher timestamp/copies) MUST BE set as Duplicates (Auto-Selected).
+        const getPathPriority = (filePath = '') => {
+          const lower = filePath.toLowerCase();
+          if (lower.includes('/dcim/camera/')) return 1;
+          if (lower.includes('/dcim/')) return 2;
+          if (lower.includes('/pictures/')) return 3;
+          if (lower.includes('/whatsapp/')) return 4;
+          if (lower.includes('/documents/')) return 5;
+          if (lower.includes('/download/')) return 6;
+          return 10;
+        };
+
+        verifiedFiles.sort((a, b) => {
+          const timeA = Number(a.dateModified || a.modificationTime || 0);
+          const timeB = Number(b.dateModified || b.modificationTime || 0);
+
+          // 1. Primary: Sort by timestamp ASCENDING (Oldest file first)
+          if (timeA !== timeB && timeA > 0 && timeB > 0) {
+            return timeA - timeB;
+          }
+
+          // 2. Fallback: Path hierarchy priority (Camera > Pictures > WhatsApp > Documents > Download)
+          return getPathPriority(a.path) - getPathPriority(b.path);
+        });
+
+        console.log(`[ImageHashEngine] Verified Group Sorted Chronologically (Oldest File Selected as Original):`);
+        verifiedFiles.forEach((f, index) => {
+          console.log(`  [${index === 0 ? 'ORIGINAL (SAFE)' : 'DUPLICATE (SELECTED)'}] "${f.path}" | Timestamp: ${f.dateModified || f.modificationTime}`);
+        });
+
         const groupSize = Number(verifiedFiles[0].size);
         const reclaimableBytes = groupSize * (verifiedFiles.length - 1);
 
