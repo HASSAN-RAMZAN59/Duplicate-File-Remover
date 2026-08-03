@@ -33,6 +33,49 @@ const getCleanBaseName = (filename = '') => {
 };
 
 /**
+ * Path Priority Ranking for same-timestamp tiebreaker
+ * Prioritizes system camera/pictures directory over secondary paths (/Download, /Documents)
+ */
+const getPathPriority = (filePath = '') => {
+  const lower = filePath.toLowerCase();
+  if (lower.includes('/dcim/camera/')) return 1;
+  if (lower.includes('/dcim/')) return 2;
+  if (lower.includes('/pictures/')) return 3;
+  if (lower.includes('/movies/')) return 4;
+  if (lower.includes('/music/')) return 5;
+  if (lower.includes('/whatsapp/')) return 6;
+  if (lower.includes('/documents/')) return 7;
+  if (lower.includes('/download/')) return 8;
+  return 10;
+};
+
+/**
+ * Strict Chronological Comparator for File Group Sorting
+ * 1. Timestamp ASCENDING (Oldest timestamp first -> Index 0 = Original)
+ * 2. System Photo/Camera directory path priority tiebreaker
+ * 3. Alphabetical path tiebreaker
+ */
+const compareFilesChronologically = (a, b) => {
+  const timeA = Number(a.modificationTime || a.dateModified || a.mtime || a.dateAdded || 0);
+  const timeB = Number(b.modificationTime || b.dateModified || b.mtime || b.dateAdded || 0);
+
+  // 1. Primary: Sort by timestamp ASCENDING (Oldest file first)
+  if (timeA !== timeB && timeA > 0 && timeB > 0) {
+    return timeA - timeB;
+  }
+
+  // 2. Fallback Priority: System Photo/Camera directory over secondary paths
+  const priorityA = getPathPriority(a.path);
+  const priorityB = getPathPriority(b.path);
+  if (priorityA !== priorityB) {
+    return priorityA - priorityB;
+  }
+
+  // 3. Final tiebreaker: Path string alphabetical comparison
+  return (a.path || '').localeCompare(b.path || '');
+};
+
+/**
  * Generates MD5 hash identifier for file content verification.
  * Derives a deterministic checksum based on exact file size, duration, and extension.
  * 
@@ -160,17 +203,11 @@ export const calculateDuplicates = (rawFiles = []) => {
 
     for (const [hash, matchingFiles] of Object.entries(hashMap)) {
       if (matchingFiles.length > 1) {
-        // Sort items by creation/modification timestamp ascending (oldest first)
-        matchingFiles.sort((a, b) => {
-          const timeA = Number(a.modificationTime || a.dateModified || 0);
-          const timeB = Number(b.modificationTime || b.dateModified || 0);
-          if (timeA !== timeB && timeA > 0 && timeB > 0) {
-            return timeA - timeB;
-          }
-          return (a.path || '').localeCompare(b.path || '');
-        });
+        // Sort items strictly chronologically ascending (Oldest timestamp -> Index 0)
+        matchingFiles.sort(compareFilesChronologically);
 
-        // Set oldest file as Original (Safe / Unchecked), all N remaining as Duplicate (Auto-Checked)
+        // Index 0: Oldest file = Original (Safe / Unchecked)
+        // Index 1 to N: Newer files = Duplicate (Auto-Checked)
         const formattedFiles = matchingFiles.map((file, idx) => ({
           ...file,
           isOriginal: idx === 0,
@@ -225,14 +262,7 @@ export const calculateDuplicates = (rawFiles = []) => {
     }
 
     if (cluster.length > 1) {
-      cluster.sort((a, b) => {
-        const timeA = Number(a.modificationTime || a.dateModified || 0);
-        const timeB = Number(b.dateModified || b.modificationTime || 0);
-        if (timeA !== timeB && timeA > 0 && timeB > 0) {
-          return timeA - timeB;
-        }
-        return (a.path || '').localeCompare(b.path || '');
-      });
+      cluster.sort(compareFilesChronologically);
 
       const formattedFiles = cluster.map((file, idx) => ({
         ...file,
