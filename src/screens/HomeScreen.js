@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { COLORS } from '../constants/colors';
+import { ROUTES } from '../navigation/routes';
 
 const CATEGORIES = [
   { id: 'images', name: 'Images', icon: '🖼️' },
@@ -23,15 +24,13 @@ export const HomeScreen = ({ navigation }) => {
   const [isScanning, setIsScanning] = useState(false);
 
   const handleCategoryPress = (category) => {
-    Alert.alert(category.name, `Scanning for ${category.name} duplicates...`);
+    navigation.navigate(ROUTES.DUPLICATE_VIEWER, {
+      categoryType: category.name,
+    });
   };
 
   const handleDeepScan = () => {
-    setIsScanning(true);
-    setTimeout(() => {
-      setIsScanning(false);
-      Alert.alert('Scan Complete', 'Deep scan finished.');
-    }, 1500);
+    navigation.navigate(ROUTES.DEEP_SCAN);
   };
 
   return (

@@ -8,4 +8,5 @@ export const ROUTES = {
   SETTINGS: 'Settings',
   HELP: 'Help',
   PRIVACY_POLICY: 'PrivacyPolicy',
+  DUPLICATE_VIEWER: 'DuplicateViewer',
 };
