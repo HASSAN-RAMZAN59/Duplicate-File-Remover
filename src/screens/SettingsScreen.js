@@ -9,6 +9,7 @@ import {
   Switch,
 } from 'react-native';
 import { COLORS } from '../constants/colors';
+import { ROUTES } from '../navigation/routes';
 
 export const SettingsScreen = ({ navigation }) => {
   const [autoScan, setAutoScan] = useState(true);
@@ -21,15 +22,15 @@ export const SettingsScreen = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.drawerButton}
-          onPress={() => navigation.openDrawer()}
+          style={styles.backButton}
+          onPress={() => navigation.navigate(ROUTES.HOME)}
           activeOpacity={0.7}
-          accessibilityLabel="Open Navigation Drawer"
+          accessibilityLabel="Go Back to Home"
         >
-          <Text style={styles.hamburgerIconText}>☰</Text>
+          <Text style={styles.backIconText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>App Settings</Text>
-        <View style={{ width: 42 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -127,7 +128,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.cardBorder,
   },
-  drawerButton: {
+  backButton: {
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -137,11 +138,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.primaryLight + '60',
   },
-  hamburgerIconText: {
-    fontSize: 24,
+  backIconText: {
+    fontSize: 22,
     color: COLORS.textPrimary,
     fontWeight: 'bold',
-    lineHeight: 26,
+    lineHeight: 24,
   },
   headerTitle: {
     fontSize: 18,

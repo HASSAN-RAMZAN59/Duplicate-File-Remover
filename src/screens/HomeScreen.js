@@ -36,8 +36,24 @@ export const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Top Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.drawerButton}
+          onPress={() => navigation.openDrawer()}
+          activeOpacity={0.7}
+          accessibilityLabel="Open Navigation Drawer"
+        >
+          <Text style={styles.hamburgerIconText}>☰</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle}>Duplicate File Remover</Text>
+        <View style={{ width: 44 }} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Home Screen</Text>
+        <Text style={styles.title}>Storage Cleaner</Text>
+        <Text style={styles.subtitle}>Select a category to find duplicate files</Text>
 
         <View style={styles.grid}>
           {CATEGORIES.map((category) => (
@@ -70,6 +86,36 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background || '#FFFFFF',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cardBorder || '#1E293B',
+  },
+  drawerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.cardBackground || '#1E293B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.primaryLight + '60',
+  },
+  hamburgerIconText: {
+    fontSize: 24,
+    color: COLORS.textPrimary || '#FFFFFF',
+    fontWeight: 'bold',
+    lineHeight: 26,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary || '#FFFFFF',
   },
   container: {
     padding: 24,
