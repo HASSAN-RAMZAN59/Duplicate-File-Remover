@@ -51,6 +51,25 @@ const getExtension = (filename = '') => {
 };
 
 /**
+ * Helper to check if file/folder is Trash, Cache, Thumbnail, or Hidden dot file
+ */
+const isHiddenOrTrash = (name = '', path = '') => {
+  if (name.startsWith('.')) return true;
+  const lowerPath = path.toLowerCase();
+  if (
+    lowerPath.includes('/.trash') ||
+    lowerPath.includes('/trash') ||
+    lowerPath.includes('/.thumbnails') ||
+    lowerPath.includes('/.cache') ||
+    lowerPath.includes('/.pending') ||
+    lowerPath.includes('/android/data')
+  ) {
+    return true;
+  }
+  return false;
+};
+
+/**
  * Recursive Directory Crawler
  * Scans directories and subfolders up to maxDepth.
  */
@@ -63,6 +82,10 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, d
 
     for (const item of items) {
       try {
+        if (isHiddenOrTrash(item.name, item.path)) {
+          continue;
+        }
+
         const isFile = typeof item.isFile === 'function' ? item.isFile() : !item.isDirectory;
 
         if (isFile) {
