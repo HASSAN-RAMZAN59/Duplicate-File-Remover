@@ -1,8 +1,9 @@
 import { NativeModules } from 'react-native';
+import Contacts from 'react-native-contacts';
 
 /**
  * 1. Clean Phone Number Utility
- * Strips whitespace, dashes, parentheses (), plus signs +, and common country code prefixes (e.g. +1, +92, +44)
+ * Strips whitespace, dashes, parentheses (), plus signs +, and common country code prefixes (e.g. +1, +92, +44, +91, +61)
  * to normalize phone numbers into a clean numeric string for comparison.
  * 
  * @param {string} rawNumber 
@@ -37,7 +38,7 @@ export const cleanPhoneNumber = (rawNumber = '') => {
 };
 
 /**
- * Normalizes contact names for string comparison.
+ * Normalizes contact names for string comparison (case-insensitive, trimmed).
  * @param {string} name 
  * @returns {string}
  */
@@ -46,11 +47,21 @@ export const normalizeName = (name = '') => {
 };
 
 /**
- * 2. Fetch Phone Contacts from Device
- * Returns ONLY real contacts fetched from device storage via Native Contacts bridge. No dummy data.
+ * 2. Fetch Phone Contacts from Device via react-native-contacts native API bridge.
  * @returns {Promise<Array<Object>>}
  */
 export const fetchContacts = async () => {
+  try {
+    if (Contacts && typeof Contacts.getAll === 'function') {
+      const contacts = await Contacts.getAll();
+      if (Array.isArray(contacts) && contacts.length > 0) {
+        return contacts;
+      }
+    }
+  } catch (error) {
+    console.warn('[ContactScanner] react-native-contacts getAll error:', error);
+  }
+
   try {
     const ContactsNative = NativeModules.RNContacts || NativeModules.Contacts;
     if (ContactsNative && typeof ContactsNative.getAll === 'function') {
@@ -60,16 +71,16 @@ export const fetchContacts = async () => {
       }
     }
   } catch (error) {
-    console.warn('[ContactScanner] Native contacts fetch error:', error);
+    console.warn('[ContactScanner] Fallback native contacts getAll error:', error);
   }
 
-  // Artificial delay for smooth UI feedback
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 300));
   return [];
 };
 
 /**
- * 3. Identify Duplicate Contacts by matching cleaned Phone Numbers or identical Names
+ * 3. Identify Duplicate Contacts based on Exact Display Name (case-insensitive)
+ * or Normalized Phone Numbers.
  * Returns structured DuplicateGroup array matching the app's hashEngine output.
  * 
  * @param {Array<Object>} contactsList 
@@ -87,13 +98,13 @@ export const findDuplicateContacts = (contactsList = []) => {
     const name = contact.displayName || `${contact.givenName || ''} ${contact.familyName || ''}`.trim() || 'Unknown';
     const normNameKey = normalizeName(name);
 
-    // Group by Name
-    if (normNameKey && normNameKey.length > 2) {
+    // Group by Exact Display Name (Case-Insensitive)
+    if (normNameKey && normNameKey.length >= 2) {
       if (!nameMap[normNameKey]) nameMap[normNameKey] = [];
       nameMap[normNameKey].push(contact);
     }
 
-    // Group by Cleaned Phone Number
+    // Group by Cleaned/Normalized Phone Number
     if (Array.isArray(contact.phoneNumbers)) {
       for (const phoneObj of contact.phoneNumbers) {
         const rawNum = typeof phoneObj === 'string' ? phoneObj : phoneObj.number;
@@ -127,7 +138,7 @@ export const findDuplicateContacts = (contactsList = []) => {
           id: contact.recordID || `contact_${idx}_${cleanNum}`,
           name: name,
           path: `Phone: ${primaryPhone}`,
-          size: 1024, // 1 KB estimation
+          size: 1024, // 1 KB estimation per contact
           category: 'Contacts',
           isOriginal: idx === 0,
           selected: idx !== 0,

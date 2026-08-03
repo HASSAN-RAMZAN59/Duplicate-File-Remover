@@ -17,6 +17,7 @@ import { scanCategoryFiles } from '../engine/fileScanner';
 import { scanAudioFiles } from '../engine/audioScanner';
 import { calculateAudioDuplicates } from '../engine/audioHashEngine';
 import { scanContactDuplicates } from '../engine/contactScanner';
+import { mergeSelectedContactGroups } from '../engine/contactMerger';
 import { scanDocumentFiles } from '../engine/documentScanner';
 import { calculateDocumentDuplicates } from '../engine/documentHashEngine';
 import { scanImageFiles } from '../engine/imageScanner';
@@ -32,78 +33,73 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   const [duplicateGroups, setDuplicateGroups] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 1. Run Fresh Real-Time Scanning Engine whenever screen comes into focus
+  const isContacts = categoryType.toUpperCase() === 'CONTACTS';
+
+  // 1. Perform Real-Time Scanning Engine
+  const performScan = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      let groups = [];
+      let rawFiles = [];
+
+      if (categoryType.toUpperCase() === 'CONTACTS') {
+        groups = await scanContactDuplicates();
+        console.log(`[DuplicateViewer] Contacts Scan Result:`, { duplicateGroupsCount: groups.length });
+      } else if (categoryType.toUpperCase() === 'AUDIO') {
+        rawFiles = await scanAudioFiles();
+        groups = calculateAudioDuplicates(rawFiles);
+        console.log(`[DuplicateViewer] Audio Scan Result:`, {
+          rawCount: rawFiles.length,
+          duplicateGroupsCount: groups.length,
+        });
+      } else if (categoryType.toUpperCase() === 'DOCUMENTS') {
+        rawFiles = await scanDocumentFiles();
+        groups = calculateDocumentDuplicates(rawFiles);
+        console.log(`[DuplicateViewer] Documents Scan Result:`, {
+          rawCount: rawFiles.length,
+          duplicateGroupsCount: groups.length,
+        });
+      } else if (categoryType.toUpperCase() === 'IMAGES') {
+        rawFiles = await scanImageFiles();
+        groups = await calculateImageDuplicates(rawFiles);
+        console.log(`[DuplicateViewer] Ultra-Strict Images Scan Result:`, {
+          rawCount: rawFiles.length,
+          duplicateGroupsCount: groups.length,
+        });
+      } else {
+        rawFiles = await scanCategoryFiles(categoryType);
+        groups = calculateDuplicates(rawFiles);
+
+        console.log(`[DuplicateViewer] Real-Time Scan Result for ${categoryType}:`, {
+          rawCount: rawFiles.length,
+          duplicateGroupsCount: groups.length,
+        });
+      }
+
+      if (rawFiles.length > 0 && groups.length === 0) {
+        console.log(
+          `[DuplicateViewer] Raw files were fetched (${rawFiles.length}), 0 duplicate groups matched.`
+        );
+      }
+
+      setDuplicateGroups(groups);
+    } catch (error) {
+      console.error('[DuplicateViewer] Scanning error:', error);
+      setDuplicateGroups([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [categoryType]);
+
+  // Run scan whenever screen comes into focus
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
-
-      const performScan = async () => {
-        setIsLoading(true);
-        try {
-          let groups = [];
-          let rawFiles = [];
-
-          if (categoryType.toUpperCase() === 'CONTACTS') {
-            groups = await scanContactDuplicates();
-            console.log(`[DuplicateViewer] Contacts Scan Result:`, { duplicateGroupsCount: groups.length });
-          } else if (categoryType.toUpperCase() === 'AUDIO') {
-            rawFiles = await scanAudioFiles();
-            groups = calculateAudioDuplicates(rawFiles);
-            console.log(`[DuplicateViewer] Audio Scan Result:`, {
-              rawCount: rawFiles.length,
-              duplicateGroupsCount: groups.length,
-            });
-          } else if (categoryType.toUpperCase() === 'DOCUMENTS') {
-            rawFiles = await scanDocumentFiles();
-            groups = calculateDocumentDuplicates(rawFiles);
-            console.log(`[DuplicateViewer] Documents Scan Result:`, {
-              rawCount: rawFiles.length,
-              duplicateGroupsCount: groups.length,
-            });
-          } else if (categoryType.toUpperCase() === 'IMAGES') {
-            rawFiles = await scanImageFiles();
-            groups = await calculateImageDuplicates(rawFiles);
-            console.log(`[DuplicateViewer] Ultra-Strict Images Scan Result:`, {
-              rawCount: rawFiles.length,
-              duplicateGroupsCount: groups.length,
-            });
-          } else {
-            rawFiles = await scanCategoryFiles(categoryType);
-            groups = calculateDuplicates(rawFiles);
-
-            console.log(`[DuplicateViewer] Real-Time Scan Result for ${categoryType}:`, {
-              rawCount: rawFiles.length,
-              duplicateGroupsCount: groups.length,
-            });
-          }
-
-          if (rawFiles.length > 0 && groups.length === 0) {
-            console.log(
-              `[DuplicateViewer] Raw files were fetched (${rawFiles.length}), 0 duplicate groups matched.`
-            );
-          }
-
-          if (isMounted) {
-            setDuplicateGroups(groups);
-          }
-        } catch (error) {
-          console.error('[DuplicateViewer] Scanning error:', error);
-          if (isMounted) {
-            setDuplicateGroups([]);
-          }
-        } finally {
-          if (isMounted) {
-            setIsLoading(false);
-          }
-        }
-      };
-
       performScan();
-
       return () => {
         isMounted = false;
       };
-    }, [categoryType])
+    }, [performScan])
   );
 
   // Handle single file deletion sync when returning from FileDetailScreen
@@ -131,9 +127,9 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
       navigation.setParams({ deletedFilePath: undefined, deletedFileId: undefined });
     }
-  }, [route.params?.deletedFilePath, route.params?.deletedFileId]);
+  }, [route.params?.deletedFilePath, route.params?.deletedFileId, navigation]);
 
-  // 2. Computed Metrics (Selected items count & total bytes selected for deletion)
+  // 2. Computed Metrics (Selected items count & total bytes selected)
   const selectionSummary = useMemo(() => {
     let selectedCount = 0;
     let selectedBytes = 0;
@@ -188,72 +184,110 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     );
   };
 
-  // 4. Batch Delete Handler
-  const handleDeleteSelected = () => {
+  // 4. Primary Action Handler (Merge Contacts for Contacts tab, Delete Selected for Files)
+  const handlePrimaryAction = () => {
     if (selectionSummary.selectedCount === 0) {
-      Alert.alert('No Selection', 'Please select at least one duplicate file to delete.');
+      Alert.alert(
+        'No Selection',
+        isContacts
+          ? 'Please select at least one duplicate contact to merge.'
+          : 'Please select at least one duplicate file to delete.'
+      );
       return;
     }
 
-    Alert.alert(
-      'Confirm Deletion',
-      `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})? This action will remove them from your device.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeleting(true);
-            const selectedItems = [];
+    if (isContacts) {
+      // Contact Merging Action Switch
+      Alert.alert(
+        'Confirm Contact Merge',
+        'Selected duplicate contacts will be merged into 1 unified contact card with all details preserved.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Merge Contacts',
+            style: 'default',
+            onPress: async () => {
+              setIsDeleting(true);
+              try {
+                const res = await mergeSelectedContactGroups(duplicateGroups);
+                setIsDeleting(false);
 
-            duplicateGroups.forEach((group) => {
-              group.files.forEach((file) => {
-                if (file.selected) {
-                  selectedItems.push(file);
+                if (res.success || res.totalMerged > 0) {
+                  Alert.alert('Contacts Merged 🎉', 'Contacts merged successfully');
+                  performScan(); // Refresh active contacts list
+                } else {
+                  Alert.alert('Merge Error', 'Could not merge selected contacts.');
                 }
-              });
-            });
-
-            try {
-              const res = await deleteBatch(selectedItems);
-              setIsDeleting(false);
-
-              if (res.deletedCount > 0) {
-                const deletedPathsSet = new Set(selectedItems.map((item) => item.path));
-
-                setDuplicateGroups((prevGroups) => {
-                  const updatedGroups = prevGroups
-                    .map((group) => {
-                      const remainingFiles = group.files.filter(
-                        (file) => !deletedPathsSet.has(file.path)
-                      );
-                      return {
-                        ...group,
-                        files: remainingFiles,
-                        fileCount: remainingFiles.length,
-                      };
-                    })
-                    .filter((group) => group.files.length > 1);
-
-                  return updatedGroups;
-                });
-
-                Alert.alert(
-                  'Cleaned Successfully 🎉',
-                  `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`
-                );
-              } else {
-                Alert.alert('Deletion Error', 'Could not remove selected files from storage.');
+              } catch (error) {
+                setIsDeleting(false);
+                Alert.alert('Error', 'An error occurred while merging contacts.');
               }
-            } catch (error) {
-              setIsDeleting(false);
-              Alert.alert('Error', 'An error occurred while deleting files.');
-            }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    } else {
+      // Regular File Deletion Action
+      Alert.alert(
+        'Confirm Deletion',
+        `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})? This action will remove them from your device.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Permanently',
+            style: 'destructive',
+            onPress: async () => {
+              setIsDeleting(true);
+              const selectedItems = [];
+
+              duplicateGroups.forEach((group) => {
+                group.files.forEach((file) => {
+                  if (file.selected) {
+                    selectedItems.push(file);
+                  }
+                });
+              });
+
+              try {
+                const res = await deleteBatch(selectedItems);
+                setIsDeleting(false);
+
+                if (res.deletedCount > 0) {
+                  const deletedPathsSet = new Set(selectedItems.map((item) => item.path));
+
+                  setDuplicateGroups((prevGroups) => {
+                    const updatedGroups = prevGroups
+                      .map((group) => {
+                        const remainingFiles = group.files.filter(
+                          (file) => !deletedPathsSet.has(file.path)
+                        );
+                        return {
+                          ...group,
+                          files: remainingFiles,
+                          fileCount: remainingFiles.length,
+                        };
+                      })
+                      .filter((group) => group.files.length > 1);
+
+                    return updatedGroups;
+                  });
+
+                  Alert.alert(
+                    'Cleaned Successfully 🎉',
+                    `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`
+                  );
+                } else {
+                  Alert.alert('Deletion Error', 'Could not remove selected files from storage.');
+                }
+              } catch (error) {
+                setIsDeleting(false);
+                Alert.alert('Error', 'An error occurred while deleting files.');
+              }
+            },
+          },
+        ]
+      );
+    }
   };
 
   // 5. Render Group Card
@@ -283,7 +317,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* File Item List inside Group */}
+        {/* File / Contact Item List inside Group */}
         {group.files.map((file, idx) => {
           const ext = (file.extension || '').toLowerCase();
           const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp', '.svg'].includes(ext);
@@ -299,7 +333,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                 file.isOriginal && styles.originalFileItem,
                 file.selected && styles.selectedFileItem,
               ]}
-              onPress={() => navigation.navigate(ROUTES.FILE_DETAIL, { file })}
+              onPress={() => !isContacts && navigation.navigate(ROUTES.FILE_DETAIL, { file })}
               activeOpacity={0.8}
             >
               {/* Checkbox / Badge */}
@@ -342,14 +376,14 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                         : file.category === 'Audio' || (ext && ['.mp3', '.wav', '.m4a', '.aac', '.opus', '.ogg', '.flac'].includes(ext))
                         ? '🎵'
                         : file.category === 'Contacts'
-                        ? '👥'
+                        ? '👤'
                         : '📄'}
                     </Text>
                   </View>
                 )}
               </View>
 
-              {/* File Info */}
+              {/* File / Contact Info */}
               <View style={styles.fileDetails}>
                 <Text style={styles.fileName} numberOfLines={1}>
                   {file.title || file.name}
@@ -387,7 +421,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           <Text style={styles.emptyIcon}>🎉</Text>
           <Text style={styles.emptyTitle}>No Duplicates Found</Text>
           <Text style={styles.emptySubtitle}>
-            Your {categoryType} storage is clean! No duplicate files were detected.
+            Your {categoryType} storage is clean! No duplicate items were detected.
           </Text>
         </View>
       ) : (
@@ -403,26 +437,28 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           <View style={styles.bottomBar}>
             <View style={styles.summaryContainer}>
               <Text style={styles.summaryText}>
-                Selected: {selectionSummary.selectedCount} file(s)
+                Selected: {selectionSummary.selectedCount} {isContacts ? 'contact(s)' : 'file(s)'}
               </Text>
               <Text style={styles.summarySubtext}>
-                Reclaim: {selectionSummary.formattedBytes}
+                {isContacts ? 'Action: Contact Merging' : `Reclaim: ${selectionSummary.formattedBytes}`}
               </Text>
             </View>
 
             <TouchableOpacity
               style={[
-                styles.deleteButton,
+                isContacts ? styles.mergeButton : styles.deleteButton,
                 (selectionSummary.selectedCount === 0 || isDeleting) && styles.disabledDeleteButton,
               ]}
-              onPress={handleDeleteSelected}
+              onPress={handlePrimaryAction}
               disabled={selectionSummary.selectedCount === 0 || isDeleting}
             >
               {isDeleting ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.deleteButtonText}>
-                  Delete Selected ({selectionSummary.selectedCount})
+                <Text style={styles.actionButtonText}>
+                  {isContacts
+                    ? `Merge Selected Contacts (${selectionSummary.selectedCount})`
+                    : `Delete Selected (${selectionSummary.selectedCount})`}
                 </Text>
               )}
             </TouchableOpacity>
@@ -610,19 +646,6 @@ const styles = StyleSheet.create({
   thumbnailFallbackIcon: {
     fontSize: 22,
   },
-  videoBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  videoBadgeIcon: {
-    color: '#FFFFFF',
-    fontSize: 10,
-  },
   fileDetails: {
     flex: 1,
   },
@@ -669,11 +692,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 10,
   },
+  mergeButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+  },
   disabledDeleteButton: {
     backgroundColor: '#475569',
     opacity: 0.6,
   },
-  deleteButtonText: {
+  actionButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: 'bold',

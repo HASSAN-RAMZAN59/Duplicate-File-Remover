@@ -73,8 +73,6 @@ export const permissionService = {
 
   /**
    * Check status of storage permission with full Old & New Android version support.
-   * Android 11+ (API 30+): MANAGE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO
-   * Android 6 - 10 (API <= 29): READ_EXTERNAL_STORAGE
    */
   checkPermission: async (type) => {
     try {
@@ -108,7 +106,6 @@ export const permissionService = {
 
             return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
           } else {
-            // Legacy Android 6 to 10 (API <= 29)
             const res = await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
             return normalizeStatus(res);
           }
@@ -120,8 +117,8 @@ export const permissionService = {
 
       if (type === PERMISSION_TYPES.CONTACTS) {
         if (Platform.OS === 'android') {
-          const res = await check(PERMISSIONS.ANDROID.READ_CONTACTS);
-          return normalizeStatus(res);
+          const readRes = await check(PERMISSIONS.ANDROID.READ_CONTACTS);
+          return normalizeStatus(readRes);
         } else if (Platform.OS === 'ios') {
           const res = await check(PERMISSIONS.IOS.CONTACTS);
           return normalizeStatus(res);
@@ -136,21 +133,19 @@ export const permissionService = {
   },
 
   /**
-   * Request storage & media permissions with full Old & New Android version support.
+   * Request storage & contacts permissions sequentially on Android.
    */
   requestPermission: async (type) => {
     try {
       if (type === PERMISSION_TYPES.STORAGE) {
         if (Platform.OS === 'android') {
           if (Platform.Version >= 33) {
-            // Android 13, 14, 15 (API 33+)
             const [imgRes, vidRes, audRes] = await Promise.all([
               request(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES),
               request(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO),
               request(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO),
             ]);
 
-            // Request All Files Access page if not granted on Android 11+
             const isAllFilesOk = await permissionService.checkAllFilesAccess();
             if (!isAllFilesOk) {
               await permissionService.requestAllFilesAccess();
@@ -163,7 +158,6 @@ export const permissionService = {
 
             return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
           } else if (Platform.Version >= 30) {
-            // Android 11, 12 (API 30-32)
             const isAllFilesOk = await permissionService.checkAllFilesAccess();
             if (!isAllFilesOk) {
               await permissionService.requestAllFilesAccess();
@@ -171,7 +165,6 @@ export const permissionService = {
             const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
             return normalizeStatus(res);
           } else {
-            // Legacy Android 6 to 10 (API <= 29)
             const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
             return normalizeStatus(res);
           }
@@ -183,10 +176,18 @@ export const permissionService = {
 
       if (type === PERMISSION_TYPES.CONTACTS) {
         if (Platform.OS === 'android') {
-          const res = await request(PERMISSIONS.ANDROID.READ_CONTACTS);
-          return normalizeStatus(res);
+          // Request READ_CONTACTS first, then WRITE_CONTACTS sequentially
+          const readRes = await request(PERMISSIONS.ANDROID.READ_CONTACTS);
+          if (isGrantedOrLimited(readRes)) {
+            try {
+              await request(PERMISSIONS.ANDROID.WRITE_CONTACTS);
+            } catch (e) {
+              console.warn('[PermissionService] WRITE_CONTACTS request warning:', e);
+            }
+          }
+          return normalizeStatus(readRes);
         } else if (Platform.OS === 'ios') {
-          const res = await check(PERMISSIONS.IOS.CONTACTS);
+          const res = await request(PERMISSIONS.IOS.CONTACTS);
           return normalizeStatus(res);
         }
       }
