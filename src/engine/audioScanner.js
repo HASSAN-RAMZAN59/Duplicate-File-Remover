@@ -1,7 +1,7 @@
 import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
 
 /**
- * Standard Audio File Extensions (Includes Chat & Voice Notes)
+ * Standard Audio File Extensions (Includes Chat, Music & Voice Notes)
  */
 export const AUDIO_EXTENSIONS = [
   '.mp3',
@@ -26,33 +26,40 @@ export const AUDIO_EXTENSIONS = [
 ];
 
 /**
- * Known Top-Level Storage Folders for Fallback Direct Scans
+ * Storage Directories for Universal Audio Traversal
  */
 const TOP_LEVEL_STORAGE_PATHS = [
-  '/storage/emulated/0/Documents',
-  '/storage/emulated/0/Document',
-  '/storage/emulated/0/Download',
   '/storage/emulated/0/Music',
-  '/storage/emulated/0/DCIM',
-  '/storage/emulated/0/Pictures',
-  '/storage/emulated/0/Movies',
   '/storage/emulated/0/Recordings',
+  '/storage/emulated/0/Recordings/Call',
+  '/storage/emulated/0/Recordings/Voice',
   '/storage/emulated/0/CallRecordings',
   '/storage/emulated/0/VoiceRecorder',
+  '/storage/emulated/0/Voice Recorder',
   '/storage/emulated/0/ColorOS/recording',
   '/storage/emulated/0/MIUI/sound_recorder',
-  '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio',
-  '/storage/emulated/0/WhatsApp/Media/WhatsApp Voice Notes',
-  '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
-  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio',
-  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes',
-  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents',
-  '/storage/emulated/0/Telegram',
-  '/storage/emulated/0/Podcasts',
-  '/storage/emulated/0/Notifications',
-  '/storage/emulated/0/Ringtones',
   '/storage/emulated/0/Audio',
   '/storage/emulated/0/Sounds',
+  '/storage/emulated/0/Ringtones',
+  '/storage/emulated/0/Notifications',
+  '/storage/emulated/0/Alarms',
+  '/storage/emulated/0/Podcasts',
+  '/storage/emulated/0/Documents',
+  '/storage/emulated/0/Download',
+  '/storage/emulated/0/Download/Telegram',
+  '/storage/emulated/0/Download/WhatsApp',
+  '/storage/emulated/0/SHAREit',
+  '/storage/emulated/0/SHAREit/.status',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Voice Notes',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio/Sent',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio/Private',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio/Sent',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio/Private',
+  '/storage/emulated/0/Telegram',
+  '/storage/emulated/0/Telegram/Telegram Audio',
   '/storage/emulated/0/Media',
 ];
 
@@ -105,33 +112,30 @@ const extractTitle = (filename = '') => {
 };
 
 /**
- * Exhaustive Recursive Folder Traversal (Navigates every sub-folder up to maxDepth = 8)
+ * Universal Recursive Directory Traversal for Audio Scanning (maxDepth = 15)
  */
-const scanDirectoryExhaustive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 8) => {
+const scanDirectoryExhaustive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 15) => {
   if (depth > maxDepth) return;
 
   try {
-    if (depth <= 2) {
-      console.log(`[AudioScanner] Scanning folder: ${dirPath}`);
-    }
     const items = await RNFS.readDir(dirPath);
     if (!Array.isArray(items)) return;
 
     for (const item of items) {
       try {
-        if (item.name.startsWith('.')) continue;
-
         const lowerPath = (item.path || '').toLowerCase();
+        
+        // Skip ONLY restricted Android/data (throws OS exception on Android 11+) and .cache/.pending
         if (
-          lowerPath.includes('/.trash') ||
-          lowerPath.includes('/.thumbnails') ||
           lowerPath.includes('/.cache') ||
+          lowerPath.includes('/.pending') ||
           lowerPath.includes('/android/data')
         ) {
           continue;
         }
 
-        const isFile = typeof item.isFile === 'function' ? item.isFile() : !item.isDirectory;
+        const isDirectory = typeof item.isDirectory === 'function' ? item.isDirectory() : Boolean(item.isDirectory);
+        const isFile = typeof item.isFile === 'function' ? item.isFile() : !isDirectory;
 
         if (isFile) {
           const lastDot = item.name.lastIndexOf('.');
@@ -144,16 +148,23 @@ const scanDirectoryExhaustive = async (RNFS, dirPath, scannedFilesMap, depth = 0
             }
             try {
               rawPath = decodeURIComponent(rawPath);
-            } catch (e) { }
+            } catch (e) {}
 
             const filePath = rawPath.startsWith('/sdcard/')
               ? rawPath.replace('/sdcard/', '/storage/emulated/0/')
               : rawPath;
 
-            const fileSize = Number(item.size || 0);
+            if (!filePath || scannedFilesMap.has(filePath)) continue;
 
-            // Minimum threshold >= 0 bytes so even 2-second voice notes or small .mp3s are fetched
-            if (!scannedFilesMap.has(filePath) && fileSize > 0) {
+            let fileSize = Number(item.size || 0);
+            if (fileSize <= 0 && RNFS && typeof RNFS.stat === 'function') {
+              try {
+                const statObj = await RNFS.stat(filePath);
+                fileSize = Number(statObj.size || 0);
+              } catch (statErr) {}
+            }
+
+            if (fileSize > 0) {
               scannedFilesMap.set(filePath, {
                 id: filePath,
                 title: extractTitle(item.name),
@@ -168,17 +179,15 @@ const scanDirectoryExhaustive = async (RNFS, dirPath, scannedFilesMap, depth = 0
               });
             }
           }
-        } else if (typeof item.isDirectory === 'function' ? item.isDirectory() : item.isDirectory) {
+        } else if (isDirectory) {
           await scanDirectoryExhaustive(RNFS, item.path, scannedFilesMap, depth + 1, maxDepth);
         }
       } catch (err) {
-        // Log skipped items
-        console.log(`[AudioScanner] Skipped unreadable item in ${dirPath}: ${err.message}`);
+        // Skip inaccessible item
       }
     }
   } catch (e) {
-    // Log skipped folder
-    console.log(`[AudioScanner] Skipped restricted folder ${dirPath}: ${e.message}`);
+    // Skip unreadable directory
   }
 };
 
@@ -192,7 +201,7 @@ export const scanAudioFiles = async () => {
   await ensureAudioPermission();
   const scannedFilesMap = new Map();
 
-  console.log('[AudioScanner] Starting Exhaustive Storage Traversal across all internal storage folders...');
+  console.log('[AudioScanner] Starting Exhaustive Storage Traversal for Audio Files...');
 
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
@@ -200,17 +209,16 @@ export const scanAudioFiles = async () => {
     if (RNFS && typeof RNFS.readDir === 'function') {
       const rootStoragePath = RNFS.ExternalStorageDirectoryPath || '/storage/emulated/0';
 
-      // Step 1: Attempt Root Storage Scan
+      // Step 1: Root Storage Scan
       try {
-        console.log(`[AudioScanner] Initiating root traversal from: ${rootStoragePath}`);
-        await scanDirectoryExhaustive(RNFS, rootStoragePath, scannedFilesMap, 0, 8);
+        await scanDirectoryExhaustive(RNFS, rootStoragePath, scannedFilesMap, 0, 15);
       } catch (rootErr) {
         console.warn('[AudioScanner] Root scan warning, proceeding to deep folder list scan:', rootErr);
       }
 
       // Step 2: Traverse Top-Level Folders for complete coverage
       for (const rootDir of TOP_LEVEL_STORAGE_PATHS) {
-        await scanDirectoryExhaustive(RNFS, rootDir, scannedFilesMap, 0, 8);
+        await scanDirectoryExhaustive(RNFS, rootDir, scannedFilesMap, 0, 15);
       }
     } else {
       console.warn('[AudioScanner] Native RNFS module unavailable on runtime platform.');

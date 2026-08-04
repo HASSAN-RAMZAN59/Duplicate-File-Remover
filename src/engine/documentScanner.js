@@ -1,5 +1,4 @@
 import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
-import { getActiveSettings } from '../services/settingsService';
 
 /**
  * Supported Document Extensions
@@ -26,13 +25,20 @@ const DOCUMENT_STORAGE_PATHS = [
   '/storage/emulated/0/Download',
   '/storage/emulated/0/Download/Documents',
   '/storage/emulated/0/Download/Telegram',
+  '/storage/emulated/0/Download/WhatsApp',
+  '/storage/emulated/0/SHAREit',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents/Sent',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents/Private',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/Sent',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/Private',
   '/storage/emulated/0/Telegram/Telegram Documents',
   '/storage/emulated/0/Telegram',
   '/storage/emulated/0/DCIM',
   '/storage/emulated/0/Pictures',
   '/storage/emulated/0/Movies',
+  '/storage/emulated/0/Music',
   '/storage/emulated/0/Audio',
   '/storage/emulated/0/Media',
 ];
@@ -49,7 +55,6 @@ const ensureDocumentPermission = async () => {
       const NativeFileDeleter = NativeModules.NativeFileDeleter;
       if (NativeFileDeleter && typeof NativeFileDeleter.isAllFilesPermissionGranted === 'function') {
         const isAllGranted = await NativeFileDeleter.isAllFilesPermissionGranted();
-        console.log('[DocumentScanner] All Files Access Granted:', isAllGranted);
         if (!isAllGranted && typeof NativeFileDeleter.requestAllFilesPermission === 'function') {
           await NativeFileDeleter.requestAllFilesPermission();
         }
@@ -89,9 +94,9 @@ const extractTitle = (filename = '') => {
 };
 
 /**
- * Recursive Directory Traversal for Document Scanning (maxDepth = 8)
+ * Universal Recursive Directory Traversal for Document Scanning (maxDepth = 15)
  */
-const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 8) => {
+const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 15) => {
   if (depth > maxDepth) return;
 
   try {
@@ -100,19 +105,19 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
 
     for (const item of items) {
       try {
-        if (item.name.startsWith('.')) continue;
-
         const lowerPath = (item.path || '').toLowerCase();
+        
+        // Skip ONLY restricted Android/data (throws OS exception on Android 11+) and .cache/.pending
         if (
-          lowerPath.includes('/.trash') ||
-          lowerPath.includes('/.thumbnails') ||
           lowerPath.includes('/.cache') ||
+          lowerPath.includes('/.pending') ||
           lowerPath.includes('/android/data')
         ) {
           continue;
         }
 
-        const isFile = typeof item.isFile === 'function' ? item.isFile() : !item.isDirectory;
+        const isDirectory = typeof item.isDirectory === 'function' ? item.isDirectory() : Boolean(item.isDirectory);
+        const isFile = typeof item.isFile === 'function' ? item.isFile() : !isDirectory;
 
         if (isFile) {
           const lastDot = item.name.lastIndexOf('.');
@@ -131,11 +136,17 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
               ? rawPath.replace('/sdcard/', '/storage/emulated/0/')
               : rawPath;
 
-            const fileSize = Number(item.size || 0);
-            const settings = getActiveSettings();
-            const minSizeThreshold = settings && settings.ignoreSmallFiles ? 102400 : 0;
+            if (!filePath || scannedFilesMap.has(filePath)) continue;
 
-            if (!scannedFilesMap.has(filePath) && fileSize > minSizeThreshold) {
+            let fileSize = Number(item.size || 0);
+            if (fileSize <= 0 && RNFS && typeof RNFS.stat === 'function') {
+              try {
+                const statObj = await RNFS.stat(filePath);
+                fileSize = Number(statObj.size || 0);
+              } catch (statErr) {}
+            }
+
+            if (fileSize > 0) {
               scannedFilesMap.set(filePath, {
                 id: filePath,
                 title: extractTitle(item.name),
@@ -149,7 +160,7 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
               });
             }
           }
-        } else if (typeof item.isDirectory === 'function' ? item.isDirectory() : item.isDirectory) {
+        } else if (isDirectory) {
           await scanDirectoryRecursive(RNFS, item.path, scannedFilesMap, depth + 1, maxDepth);
         }
       } catch (err) {
@@ -171,7 +182,7 @@ export const scanDocumentFiles = async () => {
   await ensureDocumentPermission();
   const scannedFilesMap = new Map();
 
-  console.log('[DocumentScanner] Starting Document Storage Traversal...');
+  console.log('[DocumentScanner] Starting Exhaustive Document Storage Traversal...');
 
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
@@ -181,14 +192,14 @@ export const scanDocumentFiles = async () => {
 
       // Step 1: Scan Root Storage
       try {
-        await scanDirectoryRecursive(RNFS, rootStoragePath, scannedFilesMap, 0, 8);
+        await scanDirectoryRecursive(RNFS, rootStoragePath, scannedFilesMap, 0, 15);
       } catch (rootErr) {
         console.warn('[DocumentScanner] Root scan warning, proceeding to folder list scan:', rootErr);
       }
 
       // Step 2: Scan Top-Level Document Folders
       for (const rootDir of DOCUMENT_STORAGE_PATHS) {
-        await scanDirectoryRecursive(RNFS, rootDir, scannedFilesMap, 0, 8);
+        await scanDirectoryRecursive(RNFS, rootDir, scannedFilesMap, 0, 15);
       }
     } else {
       console.warn('[DocumentScanner] Native RNFS module unavailable on runtime platform.');

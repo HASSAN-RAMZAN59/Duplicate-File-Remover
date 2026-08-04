@@ -1,5 +1,4 @@
 import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
-import { getActiveSettings } from '../services/settingsService';
 
 /**
  * Comprehensive File Extensions by Category
@@ -13,7 +12,7 @@ export const CATEGORY_EXTENSIONS = {
 };
 
 /**
- * Public Mobile Storage Directory Paths for Android & iOS
+ * Mobile Storage Directory Paths for Exhaustive Scanning
  */
 const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/DCIM',
@@ -33,6 +32,7 @@ const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/Download/Video',
   '/storage/emulated/0/Download/Telegram',
   '/storage/emulated/0/Download/Audio',
+  '/storage/emulated/0/Download/Documents',
   '/storage/emulated/0/Documents',
   '/storage/emulated/0/Document',
   '/storage/emulated/0/Recordings',
@@ -44,6 +44,7 @@ const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/ColorOS/recording',
   '/storage/emulated/0/MIUI/sound_recorder',
   '/storage/emulated/0/Pictures',
+  '/storage/emulated/0/Pictures/.thumbnails',
   '/storage/emulated/0/Pictures/Screenshots',
   '/storage/emulated/0/Pictures/Telegram',
   '/storage/emulated/0/Pictures/Instagram',
@@ -51,18 +52,31 @@ const STORAGE_ROOT_PATHS = [
   '/storage/emulated/0/Pictures/PhotoEditor',
   '/storage/emulated/0/Pictures/PicsArt',
   '/storage/emulated/0/Pictures/Snapseed',
+  '/storage/emulated/0/Pictures/InCollage',
   '/storage/emulated/0/Music',
+  '/storage/emulated/0/Ringtones',
+  '/storage/emulated/0/Notifications',
+  '/storage/emulated/0/Alarms',
+  '/storage/emulated/0/SHAREit',
+  '/storage/emulated/0/SHAREit/.status',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Video',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Video/Sent',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Video/Private',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Audio',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Voice Notes',
   '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
+  '/storage/emulated/0/WhatsApp/Media/.Statuses',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video/Sent',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video/Private',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio',
   '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/.Statuses',
   '/storage/emulated/0/Telegram/Telegram Video',
   '/storage/emulated/0/Telegram/Telegram Audio',
+  '/storage/emulated/0/Telegram/Telegram Documents',
   '/storage/emulated/0/Audio',
   '/storage/emulated/0/Sounds',
   '/storage/emulated/0/Media',
@@ -78,7 +92,7 @@ const ensureCategoryPermission = async (categoryType) => {
     const catUpper = (categoryType || '').toUpperCase();
 
     if (Platform.Version >= 30) {
-      if (catUpper === 'DOCUMENTS' || catUpper === 'OTHERS') {
+      if (catUpper === 'DOCUMENTS' || catUpper === 'OTHERS' || catUpper === 'VIDEOS') {
         const NativeFileDeleter = NativeModules.NativeFileDeleter;
         if (NativeFileDeleter && typeof NativeFileDeleter.isAllFilesPermissionGranted === 'function') {
           const isAllOk = await NativeFileDeleter.isAllFilesPermissionGranted();
@@ -124,23 +138,20 @@ const ensureCategoryPermission = async (categoryType) => {
 };
 
 /**
- * Helper to extract extension from filename
+ * Helper to extract file extension
  */
 const getExtension = (filename = '') => {
-  const lastDotIndex = filename.lastIndexOf('.');
-  if (lastDotIndex === -1) return '';
-  return filename.substring(lastDotIndex).toLowerCase();
+  const lastDot = filename.lastIndexOf('.');
+  if (lastDot === -1) return '';
+  return filename.substring(lastDot).toLowerCase();
 };
 
 /**
- * Helper to check if file/folder is Trash, Cache, Thumbnail, or Hidden dot file
+ * Checks if path points to restricted system data or caches
  */
-const isHiddenOrTrash = (name = '', path = '') => {
-  if (name.startsWith('.')) return true;
+const isRestrictedOrCache = (path = '') => {
   const lowerPath = path.toLowerCase();
   if (
-    lowerPath.includes('/.trash') ||
-    lowerPath.includes('/.thumbnails') ||
     lowerPath.includes('/.cache') ||
     lowerPath.includes('/.pending') ||
     lowerPath.includes('/android/data')
@@ -151,10 +162,10 @@ const isHiddenOrTrash = (name = '', path = '') => {
 };
 
 /**
- * Recursive Directory Crawler
- * Scans directories and subfolders up to maxDepth (10 levels).
+ * Universal Recursive Directory Crawler for Category Files (Videos, Others, etc.)
+ * Scans directories and subfolders up to maxDepth (15 levels).
  */
-const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, categoryType, depth = 0, maxDepth = 10) => {
+const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, categoryType, depth = 0, maxDepth = 15) => {
   if (depth > maxDepth) return;
 
   try {
@@ -163,11 +174,12 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
 
     for (const item of items) {
       try {
-        if (isHiddenOrTrash(item.name, item.path)) {
+        if (isRestrictedOrCache(item.path)) {
           continue;
         }
 
-        const isFile = typeof item.isFile === 'function' ? item.isFile() : !item.isDirectory;
+        const isDirectory = typeof item.isDirectory === 'function' ? item.isDirectory() : Boolean(item.isDirectory);
+        const isFile = typeof item.isFile === 'function' ? item.isFile() : !isDirectory;
 
         if (isFile) {
           const ext = getExtension(item.name);
@@ -184,12 +196,17 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
               ? rawPath.replace('/sdcard/', '/storage/emulated/0/')
               : rawPath;
 
-            const fileSize = Number(item.size || 0);
-            const settings = getActiveSettings();
-            const minSizeThreshold = settings && settings.ignoreSmallFiles ? 102400 : 0;
+            if (!filePath || scannedFilesMap.has(filePath)) continue;
 
-            // Avoid duplicate scan entries for same file path
-            if (!scannedFilesMap.has(filePath) && fileSize > minSizeThreshold) {
+            let fileSize = Number(item.size || 0);
+            if (fileSize <= 0 && RNFS && typeof RNFS.stat === 'function') {
+              try {
+                const statObj = await RNFS.stat(filePath);
+                fileSize = Number(statObj.size || 0);
+              } catch (statErr) {}
+            }
+
+            if (fileSize > 0) {
               const fileTimestamp = item.mtime ? new Date(item.mtime).getTime() : Date.now();
               scannedFilesMap.set(filePath, {
                 id: filePath,
@@ -203,8 +220,7 @@ const scanDirectoryRecursive = async (RNFS, dirPath, extList, scannedFilesMap, c
               });
             }
           }
-        } else if (typeof item.isDirectory === 'function' ? item.isDirectory() : item.isDirectory) {
-          // Recurse into subfolder
+        } else if (isDirectory) {
           await scanDirectoryRecursive(RNFS, item.path, extList, scannedFilesMap, categoryType, depth + 1, maxDepth);
         }
       } catch (err) {
@@ -228,7 +244,6 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
   const extList = CATEGORY_EXTENSIONS[normCategory] || [];
   const scannedFilesMap = new Map();
 
-  // Ensure category permissions are active before scanning
   await ensureCategoryPermission(categoryType);
 
   try {
@@ -237,103 +252,34 @@ export const scanCategoryFiles = async (categoryType = 'Images') => {
     if (RNFS && typeof RNFS.readDir === 'function') {
       const rootStoragePath = RNFS.ExternalStorageDirectoryPath || '/storage/emulated/0';
 
-      // Step 1: Deep Root Traversal (maxDepth = 10)
+      // Step 1: Deep Root Traversal (maxDepth = 15)
       try {
-        await scanDirectoryRecursive(RNFS, rootStoragePath, extList, scannedFilesMap, categoryType, 0, 10);
+        await scanDirectoryRecursive(RNFS, rootStoragePath, extList, scannedFilesMap, categoryType, 0, 15);
       } catch (rootErr) {
         console.warn('[FileScanner] Root storage scan warning:', rootErr);
       }
 
       // Step 2: Specific Root Folders Traversal
       for (const rootDir of STORAGE_ROOT_PATHS) {
-        await scanDirectoryRecursive(RNFS, rootDir, extList, scannedFilesMap, categoryType, 0, 10);
+        await scanDirectoryRecursive(RNFS, rootDir, extList, scannedFilesMap, categoryType, 0, 15);
       }
     } else {
       console.warn('[FileScanner] Native RNFS module unavailable on runtime platform.');
     }
   } catch (error) {
-    console.error('[FileScanner] Critical error during storage scan:', error);
+    console.error('[FileScanner] Critical error during file scan:', error);
   }
 
   const rawFileList = Array.from(scannedFilesMap.values());
-  // Sort newest files first based on modificationTime
-  rawFileList.sort((a, b) => (b.modificationTime || 0) - (a.modificationTime || 0));
+  // Sort newest files first
+  rawFileList.sort((a, b) => (b.dateModified || 0) - (a.dateModified || 0));
 
-  console.log(`[FileScanner] Total Raw ${categoryType} Fetched from Storage:`, rawFileList.length);
+  console.log(`[FileScanner] Scan Complete for category ${categoryType}. Total Files: ${rawFileList.length}`);
 
   return rawFileList;
 };
 
-/**
- * Separate Scanner for 'Others' Category
- * @returns {Promise<Array<Object>>}
- */
-export const scanOthersCategory = async () => {
-  return scanCategoryFiles('Others');
-};
-
-/**
- * Deletes a file from physical device storage.
- * Uses custom NativeFileDeleter (ContentResolver + File.delete) for guaranteed deletion across Android 6-15.
- * 
- * @param {string} filePath 
- * @returns {Promise<boolean>}
- */
-export const deleteFileFromDevice = async (filePath) => {
-  if (!filePath) return false;
-
-  // 1. Primary Native Android Deletion via MediaStore ContentResolver & File.delete
-  try {
-    const NativeFileDeleter = NativeModules.NativeFileDeleter;
-    if (NativeFileDeleter && typeof NativeFileDeleter.deleteFileNative === 'function') {
-      const isDeleted = await NativeFileDeleter.deleteFileNative(filePath);
-      console.log('[FileScanner] NativeFileDeleter result for:', filePath, '=>', isDeleted);
-      if (isDeleted) return true;
-    }
-  } catch (nativeErr) {
-    console.warn('[FileScanner] NativeFileDeleter warning:', nativeErr);
-  }
-
-  // 2. Fallback to RNFS unlink & scanFile
-  let cleanPath = filePath;
-  if (cleanPath.startsWith('file://')) {
-    cleanPath = cleanPath.substring(7);
-  }
-  try {
-    cleanPath = decodeURIComponent(cleanPath);
-  } catch (e) {}
-
-  try {
-    const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
-    if (RNFS) {
-      if (typeof RNFS.unlink === 'function') {
-        try {
-          await RNFS.unlink(cleanPath);
-        } catch (unlinkErr) {}
-      }
-
-      if (typeof RNFS.scanFile === 'function') {
-        try {
-          await RNFS.scanFile(cleanPath);
-        } catch (scanErr) {}
-      }
-
-      if (typeof RNFS.exists === 'function') {
-        const stillExists = await RNFS.exists(cleanPath);
-        return !stillExists;
-      }
-      return true;
-    }
-  } catch (error) {
-    console.error('[FileScanner] RNFS delete error for:', cleanPath, error);
-    return false;
-  }
-  return false;
-};
-
 export const fileScanner = {
   scanCategoryFiles,
-  scanOthersCategory,
-  deleteFileFromDevice,
   CATEGORY_EXTENSIONS,
 };
