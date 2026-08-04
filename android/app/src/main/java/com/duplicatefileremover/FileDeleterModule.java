@@ -19,11 +19,14 @@ import android.util.Base64;
 import android.util.Size;
 
 import com.facebook.react.bridge.ActivityEventListener;
+import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -97,6 +100,80 @@ public class FileDeleterModule extends ReactContextBaseJavaModule {
             }
         } else {
             promise.resolve(true);
+        }
+    }
+
+    /**
+     * Instantly Queries Android System MediaStore for ALL Images across internal storage
+     */
+    @ReactMethod
+    public void queryImagesNative(Promise promise) {
+        WritableArray imageList = Arguments.createArray();
+        try {
+            ContentResolver resolver = reactContext.getContentResolver();
+            Uri uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+            String[] projection = new String[]{
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DATA,
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.SIZE,
+                MediaStore.Images.Media.DATE_MODIFIED,
+                MediaStore.Images.Media.DATE_ADDED
+            };
+
+            Cursor cursor = resolver.query(uri, projection, null, null, MediaStore.Images.Media.DATE_MODIFIED + " DESC");
+            if (cursor != null) {
+                int dataIdx = cursor.getColumnIndex(MediaStore.Images.Media.DATA);
+                int nameIdx = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME);
+                int sizeIdx = cursor.getColumnIndex(MediaStore.Images.Media.SIZE);
+                int dateModIdx = cursor.getColumnIndex(MediaStore.Images.Media.DATE_MODIFIED);
+
+                while (cursor.moveToNext()) {
+                    String path = cursor.getString(dataIdx);
+                    if (path == null || path.isEmpty()) continue;
+
+                    File file = new File(path);
+                    if (!file.exists()) continue;
+
+                    String name = cursor.getString(nameIdx);
+                    if (name == null || name.isEmpty()) {
+                        name = file.getName();
+                    }
+
+                    int lastDot = name.lastIndexOf('.');
+                    String ext = lastDot != -1 ? name.substring(lastDot).toLowerCase() : "";
+                    if (!ext.equals(".jpg") && !ext.equals(".jpeg") && !ext.equals(".png") && !ext.equals(".webp") && !ext.equals(".heic")) {
+                        continue;
+                    }
+
+                    WritableMap map = Arguments.createMap();
+                    map.putString("id", path);
+                    map.putString("name", name);
+                    map.putString("path", path);
+                    map.putString("extension", ext);
+                    map.putString("category", "Images");
+
+                    long size = cursor.getLong(sizeIdx);
+                    if (size <= 0) {
+                        size = file.length();
+                    }
+                    map.putDouble("size", (double) size);
+
+                    long dateMod = cursor.getLong(dateModIdx) * 1000L;
+                    if (dateMod <= 0) {
+                        dateMod = file.lastModified();
+                    }
+                    map.putDouble("dateModified", (double) dateMod);
+                    map.putDouble("modificationTime", (double) dateMod);
+                    map.putDouble("dateAdded", (double) dateMod);
+
+                    imageList.pushMap(map);
+                }
+                cursor.close();
+            }
+            promise.resolve(imageList);
+        } catch (Exception e) {
+            promise.resolve(imageList);
         }
     }
 

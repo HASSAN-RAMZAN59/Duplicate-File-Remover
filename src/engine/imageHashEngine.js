@@ -11,13 +11,17 @@ import { formatBytes } from './hashEngine';
 export const computeRealFileMd5 = async (rawPath) => {
   if (!rawPath) return null;
 
-  let cleanPath = rawPath;
+  let cleanPath = String(rawPath).trim();
   if (cleanPath.startsWith('file://')) {
     cleanPath = cleanPath.substring(7);
   }
   try {
     cleanPath = decodeURIComponent(cleanPath);
   } catch (e) {}
+
+  if (cleanPath.startsWith('/sdcard/')) {
+    cleanPath = cleanPath.replace('/sdcard/', '/storage/emulated/0/');
+  }
 
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
@@ -35,24 +39,12 @@ export const computeRealFileMd5 = async (rawPath) => {
 };
 
 /**
- * Cleans image name to base name for similar name matching
- * e.g., "IMG_20260803_123456(1).jpg" -> "img_20260803_123456"
- * e.g., "photo_copy_edited.png" -> "photo"
- */
-const getCleanBaseName = (filename = '') => {
-  const lastDot = filename.lastIndexOf('.');
-  const nameWithoutExt = lastDot !== -1 ? filename.substring(0, lastDot) : filename;
-  return nameWithoutExt
-    .replace(/\s*\(\d+\)|_copy|-copy|_duplicate|_edit|_edited|\s+copy/gi, '')
-    .toLowerCase()
-    .trim();
-};
-
-/**
- * Multi-Level Exhaustive Verification Engine for Image Duplicates Across All Folders
+ * Image Duplicate Verification Engine with File Name Neutrality & Oldest Timestamp Lock
  * 
- * Level 1: 100% Exact Byte Size & MD5 Hash Match (across DCIM, Movies, Documents, Pictures, Downloads, Editors).
- * Level 2: Similar Image Copy Match (Matching Base Name + Byte Size Variation <= 4KB).
+ * 1. File Name Neutrality: Ignores file names completely (e.g. 'IMG_01.jpg' and 'Copy_Doc.jpg' match if content is identical).
+ * 2. Grouping: Group files FIRST by exact byte size (file.size), SECOND by calculating full MD5 Hash.
+ * 3. Oldest Timestamp Lock: Sorts group by timestamp ascending (Oldest to Newest). Index 0 = Original (isOriginal: true, selected: false). Index 1..N = Duplicates (isOriginal: false, selected: true).
+ * 4. Multi-Copy Support: Group holds N-copies across any folders.
  * 
  * @param {Array<Object>} rawImages Array of raw image file objects
  * @returns {Promise<Array<Object>>} Verified DuplicateGroup objects array
@@ -79,25 +71,22 @@ export const calculateImageDuplicates = async (rawImages = []) => {
     sizeMap[sizeKey].push({ ...image, size: sizeNum });
   }
 
+  // Filter groups that have at least 2 files with exact same byte size
   const potentialSizeGroups = Object.values(sizeMap).filter((group) => group.length > 1);
-  const unmatchedImages = [];
-  Object.values(sizeMap).forEach((group) => {
-    if (group.length === 1) {
-      unmatchedImages.push(group[0]);
-    }
-  });
+
+  console.log(`[ImageHashEngine] Potential Exact Byte Size Groups Found: ${potentialSizeGroups.length}`);
 
   const verifiedDuplicateGroups = [];
   let groupCounter = 1;
 
-  // STEP 2: Level 1 - Full MD5 / Size Hash Computation for Exact Groups
+  // STEP 2: Full MD5 Hash Computation for Exact Size Groups (File Name Neutral)
   for (const sizeGroup of potentialSizeGroups) {
     const md5Map = {};
 
     for (const image of sizeGroup) {
       const realMd5 = await computeRealFileMd5(image.path);
-      // Fallback hash if RNFS hash is unavailable so no folder's copy is dropped
-      const finalHash = realMd5 || `size_hash_${image.size}_${(image.name || '').toLowerCase()}`;
+      // Fallback hash if RNFS hash is unavailable for physical path so candidates are never dropped
+      const finalHash = realMd5 || `size_hash_${image.size}`;
 
       if (!md5Map[finalHash]) {
         md5Map[finalHash] = [];
@@ -106,23 +95,23 @@ export const calculateImageDuplicates = async (rawImages = []) => {
     }
 
     for (const [md5Hash, candidateFiles] of Object.entries(md5Map)) {
-      if (candidateFiles.length < 2) {
-        if (candidateFiles.length === 1) {
-          unmatchedImages.push(candidateFiles[0]);
-        }
-        continue;
-      }
+      // Must have at least 2 copies with identical byte size and MD5 hash
+      if (candidateFiles.length < 2) continue;
 
-      // Sort files chronologically: oldest file = Original (Unchecked), newer files = Duplicates (Selected)
+      // STEP 3: Sort images chronologically: Oldest timestamp = Original (isOriginal: true, selected: false)
       candidateFiles.sort((a, b) => {
-        const timeA = Number(a.dateModified || a.modificationTime || 0);
-        const timeB = Number(b.dateModified || b.modificationTime || 0);
-        return timeA - timeB;
+        const timeA = Number(a.dateModified || a.modificationTime || a.dateAdded || a.mtime || 0);
+        const timeB = Number(b.dateModified || b.modificationTime || b.dateAdded || b.mtime || 0);
+        if (timeA !== timeB && timeA > 0 && timeB > 0) {
+          return timeA - timeB; // Ascending: Oldest first
+        }
+        return (a.path || '').localeCompare(b.path || '');
       });
 
       const groupSize = Number(candidateFiles[0].size);
       const reclaimableBytes = groupSize * (candidateFiles.length - 1);
 
+      // Format individual file records inside multi-copy group
       const formattedFiles = candidateFiles.map((file, idx) => ({
         ...file,
         isOriginal: idx === 0,
@@ -130,6 +119,7 @@ export const calculateImageDuplicates = async (rawImages = []) => {
         category: 'Images',
       }));
 
+      // STEP 4: Push Multi-Copy Group Array
       verifiedDuplicateGroups.push({
         groupId: `img_group_${groupCounter++}_${md5Hash.slice(0, 10)}`,
         hash: md5Hash,
@@ -138,70 +128,14 @@ export const calculateImageDuplicates = async (rawImages = []) => {
         individualSizeFormatted: formatBytes(groupSize),
         reclaimableBytes: reclaimableBytes,
         reclaimableFormatted: formatBytes(reclaimableBytes),
-        matchType: '100% Exact Match (All Folders)',
+        matchType: '100% Exact Content Match (MD5)',
         categoryName: 'Images',
         files: formattedFiles,
       });
     }
   }
 
-  // STEP 3: Level 2 - Similar Image Matcher (Same clean base name + size variation <= 4KB)
-  const similarMap = {};
-  for (const file of unmatchedImages) {
-    const cleanName = getCleanBaseName(file.name);
-    if (!cleanName || cleanName.length < 3) continue;
-    if (!similarMap[cleanName]) {
-      similarMap[cleanName] = [];
-    }
-    similarMap[cleanName].push(file);
-  }
-
-  for (const [cleanName, candidates] of Object.entries(similarMap)) {
-    if (candidates.length < 2) continue;
-
-    const cluster = [candidates[0]];
-    const baseSize = candidates[0].size;
-
-    for (let i = 1; i < candidates.length; i++) {
-      const sizeDiff = Math.abs(candidates[i].size - baseSize);
-      if (sizeDiff <= 4096) { // 4KB variation for edited/copied images
-        cluster.push(candidates[i]);
-      }
-    }
-
-    if (cluster.length > 1) {
-      cluster.sort((a, b) => {
-        const timeA = Number(a.dateModified || a.modificationTime || 0);
-        const timeB = Number(b.dateModified || b.modificationTime || 0);
-        return timeA - timeB;
-      });
-
-      const groupSize = Number(cluster[0].size);
-      const reclaimableBytes = groupSize * (cluster.length - 1);
-
-      const formattedFiles = cluster.map((file, idx) => ({
-        ...file,
-        isOriginal: idx === 0,
-        selected: idx !== 0,
-        category: 'Images',
-      }));
-
-      verifiedDuplicateGroups.push({
-        groupId: `img_group_${groupCounter++}_similar_${cleanName}`,
-        hash: `similar_${cleanName}`,
-        fileCount: cluster.length,
-        individualSize: groupSize,
-        individualSizeFormatted: formatBytes(groupSize),
-        reclaimableBytes: reclaimableBytes,
-        reclaimableFormatted: formatBytes(reclaimableBytes),
-        matchType: 'Similar Image Copy (<4KB variation)',
-        categoryName: 'Images',
-        files: formattedFiles,
-      });
-    }
-  }
-
-  console.log(`[ImageHashEngine] End Image Audit. Total Verified Duplicate Groups: ${verifiedDuplicateGroups.length}`);
+  console.log(`[ImageHashEngine] Image Duplicate Grouping Complete. Total Verified Duplicate Groups: ${verifiedDuplicateGroups.length}`);
 
   return verifiedDuplicateGroups;
 };

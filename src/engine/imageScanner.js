@@ -1,22 +1,20 @@
 import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
-import { getActiveSettings } from '../services/settingsService';
 
 /**
- * Supported Image Extensions
+ * Supported Image Extensions for Scanner
+ * Strictly: [.jpg, .jpeg, .png, .webp, .heic]
  */
 export const IMAGE_EXTENSIONS = [
   '.jpg',
   '.jpeg',
   '.png',
-  '.gif',
   '.webp',
   '.heic',
-  '.bmp',
-  '.svg',
 ];
 
 /**
- * Top Storage Directories for Image Scans (Includes Documents, Downloads, Pictures, DCIM, WhatsApp, Editors, Movies)
+ * All Storage Folders for Traversal
+ * Universal Deep Traversal across all internal storage locations (/storage/emulated/0/)
  */
 const IMAGE_STORAGE_PATHS = [
   '/storage/emulated/0/DCIM',
@@ -113,10 +111,34 @@ const normalizePath = (rawPath = '') => {
 };
 
 /**
- * Recursive Directory Traversal for Image Scanning (maxDepth = 10)
- * Ensures photos in Documents/, Download/, Movies/, Pictures/, DCIM/, Image Editors, etc. are all fetched.
+ * Force MediaScanner Refresh for Key Directories (Documents, Download, etc.)
+ * Ensures freshly copied or moved images are instantly indexed and accessible.
  */
-const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 10) => {
+const forceMediaScannerRefresh = async (RNFS) => {
+  if (!RNFS || typeof RNFS.scanFile !== 'function') return;
+
+  const refreshTargets = [
+    '/storage/emulated/0/Documents',
+    '/storage/emulated/0/Download',
+    '/storage/emulated/0/Pictures',
+    '/storage/emulated/0/DCIM',
+  ];
+
+  for (const dirPath of refreshTargets) {
+    try {
+      await RNFS.scanFile(dirPath);
+    } catch (e) {
+      // Ignore scanner errors for non-existent paths
+    }
+  }
+};
+
+/**
+ * Recursive Directory Traversal for Image Scanning (Universal Deep Traversal)
+ * Scans directories and subfolders recursively up to maxDepth (15 levels).
+ * Includes Documents/, Download/, WhatsApp/Media, PhotoEditor, DCIM, Pictures, etc.
+ */
+const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 15) => {
   if (depth > maxDepth) return;
 
   try {
@@ -128,16 +150,19 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
         if (item.name.startsWith('.')) continue;
 
         const lowerPath = (item.path || '').toLowerCase();
+        // Skip hidden/system caches and restricted Android/data
         if (
           lowerPath.includes('/.trash') ||
           lowerPath.includes('/.thumbnails') ||
           lowerPath.includes('/.cache') ||
+          lowerPath.includes('/.pending') ||
           lowerPath.includes('/android/data')
         ) {
           continue;
         }
 
-        const isFile = typeof item.isFile === 'function' ? item.isFile() : !item.isDirectory;
+        const isDirectory = typeof item.isDirectory === 'function' ? item.isDirectory() : Boolean(item.isDirectory);
+        const isFile = typeof item.isFile === 'function' ? item.isFile() : !isDirectory;
 
         if (isFile) {
           const lastDot = item.name.lastIndexOf('.');
@@ -145,11 +170,17 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
 
           if (IMAGE_EXTENSIONS.includes(ext)) {
             const filePath = normalizePath(item.path || '');
-            const fileSize = Number(item.size || 0);
-            const settings = getActiveSettings();
-            const minSizeThreshold = settings && settings.ignoreSmallFiles ? 102400 : 0;
+            if (!filePath || scannedFilesMap.has(filePath)) continue;
 
-            if (filePath && !scannedFilesMap.has(filePath) && fileSize > minSizeThreshold) {
+            let fileSize = Number(item.size || 0);
+            if (fileSize <= 0 && RNFS && typeof RNFS.stat === 'function') {
+              try {
+                const statObj = await RNFS.stat(filePath);
+                fileSize = Number(statObj.size || 0);
+              } catch (statErr) {}
+            }
+
+            if (fileSize > 0) {
               const fileTimestamp = item.mtime ? new Date(item.mtime).getTime() : Date.now();
               scannedFilesMap.set(filePath, {
                 id: filePath,
@@ -160,10 +191,11 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
                 category: 'Images',
                 dateModified: fileTimestamp,
                 modificationTime: fileTimestamp,
+                dateAdded: fileTimestamp,
               });
             }
           }
-        } else if (typeof item.isDirectory === 'function' ? item.isDirectory() : item.isDirectory) {
+        } else if (isDirectory) {
           await scanDirectoryRecursive(RNFS, item.path, scannedFilesMap, depth + 1, maxDepth);
         }
       } catch (err) {
@@ -177,7 +209,9 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
 
 /**
  * Main Exhaustive Image Scanner Function
- * Crawls root storage, Documents/, Downloads/, Movies/, DCIM/, Pictures/, Editors, and all subdirectories.
+ * Combines Native Android MediaStore index query + Physical Filesystem Recursive Crawler
+ * Crawls ALL internal storage folders (/storage/emulated/0/) recursively including
+ * Documents/, Download/, WhatsApp/Media, PhotoEditor, Pictures/, DCIM/, and all subdirectories.
  * 
  * @returns {Promise<Array<Object>>} List of fetched raw image objects
  */
@@ -185,24 +219,52 @@ export const scanImageFiles = async () => {
   await ensureImagePermission();
   const scannedFilesMap = new Map();
 
-  console.log('[ImageScanner] Starting Exhaustive Storage Traversal for Images (Documents, Download, Movies, DCIM, Pictures, Editors)...');
+  console.log('[ImageScanner] Starting Universal Dual-Engine Traversal for Images (MediaStore Query + Filesystem Crawler)...');
 
+  // Step 1: Query Native Android MediaStore for instant complete device indexing
+  try {
+    const NativeFileDeleter = NativeModules.NativeFileDeleter;
+    if (NativeFileDeleter && typeof NativeFileDeleter.queryImagesNative === 'function') {
+      const nativeImages = await NativeFileDeleter.queryImagesNative();
+      if (Array.isArray(nativeImages) && nativeImages.length > 0) {
+        console.log(`[ImageScanner] Native MediaStore query fetched ${nativeImages.length} images.`);
+        for (const img of nativeImages) {
+          const normPath = normalizePath(img.path);
+          if (normPath && !scannedFilesMap.has(normPath) && Number(img.size || 0) > 0) {
+            scannedFilesMap.set(normPath, {
+              ...img,
+              id: normPath,
+              path: normPath,
+              size: Number(img.size),
+            });
+          }
+        }
+      }
+    }
+  } catch (nativeScanErr) {
+    console.warn('[ImageScanner] Native MediaStore query warning:', nativeScanErr);
+  }
+
+  // Step 2: Physical Filesystem Crawler (RNFS) for un-indexed or newly created copies
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
 
     if (RNFS && typeof RNFS.readDir === 'function') {
       const rootStoragePath = RNFS.ExternalStorageDirectoryPath || '/storage/emulated/0';
 
-      // Step 1: Scan Root Storage (Covers Documents/, Download/, Movies/, etc.)
+      // Force MediaScanner refresh for freshly copied/moved images
+      await forceMediaScannerRefresh(RNFS);
+
+      // Deep Traversal starting from Root Storage (/storage/emulated/0/)
       try {
-        await scanDirectoryRecursive(RNFS, rootStoragePath, scannedFilesMap, 0, 10);
+        await scanDirectoryRecursive(RNFS, rootStoragePath, scannedFilesMap, 0, 15);
       } catch (rootErr) {
         console.warn('[ImageScanner] Root scan warning, proceeding to folder list scan:', rootErr);
       }
 
-      // Step 2: Traverse Top-Level Folders for complete coverage
+      // Traversal of key target folders (Documents/, Download/, WhatsApp/, PhotoEditor, etc.)
       for (const rootDir of IMAGE_STORAGE_PATHS) {
-        await scanDirectoryRecursive(RNFS, rootDir, scannedFilesMap, 0, 10);
+        await scanDirectoryRecursive(RNFS, rootDir, scannedFilesMap, 0, 15);
       }
     } else {
       console.warn('[ImageScanner] Native RNFS module unavailable on runtime platform.');
@@ -212,10 +274,10 @@ export const scanImageFiles = async () => {
   }
 
   const rawImageList = Array.from(scannedFilesMap.values());
-  // Sort newest images first
+  // Sort newest images first by default
   rawImageList.sort((a, b) => (b.dateModified || 0) - (a.dateModified || 0));
 
-  console.log(`[ImageScanner] Exhaustive Image Scan Complete. Total Images Detected: ${rawImageList.length}`);
+  console.log(`[ImageScanner] Universal Image Scan Complete. Total Raw Images Detected: ${rawImageList.length}`);
 
   return rawImageList;
 };

@@ -5,7 +5,7 @@ import { getActiveSettings } from '../services/settingsService';
  * Comprehensive File Extensions by Category
  */
 export const CATEGORY_EXTENSIONS = {
-  IMAGES: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp', '.svg'],
+  IMAGES: ['.jpg', '.jpeg', '.png', '.webp', '.heic'],
   VIDEOS: ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.3gp', '.webm', '.m4v', '.ts', '.m2ts', '.mpg', '.mpeg', '.3g2', '.vob', '.divx'],
   AUDIO: ['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.wma', '.opus', '.amr', '.3ga', '.m4r', '.mp2', '.mp1', '.mid', '.midi', '.aiff'],
   DOCUMENTS: ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.txt', '.csv', '.rtf'],
