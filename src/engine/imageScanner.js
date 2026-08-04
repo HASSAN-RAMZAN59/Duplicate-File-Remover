@@ -15,6 +15,7 @@ export const IMAGE_EXTENSIONS = [
 /**
  * All Storage Folders for Traversal
  * Universal Deep Traversal across all internal storage locations (/storage/emulated/0/)
+ * Includes Documents, Download, Movies, Music, Ringtones, Pictures, DCIM, WhatsApp, Sent, Private, .Statuses, SHAREit, .status, .thumbnails, etc.
  */
 const IMAGE_STORAGE_PATHS = [
   '/storage/emulated/0/DCIM',
@@ -23,6 +24,7 @@ const IMAGE_STORAGE_PATHS = [
   '/storage/emulated/0/DCIM/100ANDRO',
   '/storage/emulated/0/DCIM/Restored',
   '/storage/emulated/0/Pictures',
+  '/storage/emulated/0/Pictures/.thumbnails',
   '/storage/emulated/0/Pictures/Screenshots',
   '/storage/emulated/0/Pictures/Instagram',
   '/storage/emulated/0/Pictures/Facebook',
@@ -33,16 +35,34 @@ const IMAGE_STORAGE_PATHS = [
   '/storage/emulated/0/Pictures/Snapseed',
   '/storage/emulated/0/Pictures/Lightroom',
   '/storage/emulated/0/Pictures/Canva',
+  '/storage/emulated/0/Pictures/InCollage',
   '/storage/emulated/0/Documents',
   '/storage/emulated/0/Document',
   '/storage/emulated/0/Download',
   '/storage/emulated/0/Download/Telegram',
   '/storage/emulated/0/Download/WhatsApp',
-  '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
-  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
-  '/storage/emulated/0/Telegram/Telegram Images',
   '/storage/emulated/0/Movies',
+  '/storage/emulated/0/Music',
+  '/storage/emulated/0/Ringtones',
+  '/storage/emulated/0/Notifications',
+  '/storage/emulated/0/Alarms',
   '/storage/emulated/0/Media',
+  '/storage/emulated/0/SHAREit',
+  '/storage/emulated/0/SHAREit/.status',
+  '/storage/emulated/0/SHAREit/pictures',
+  '/storage/emulated/0/WhatsApp',
+  '/storage/emulated/0/WhatsApp/Media',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Images',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Images/Sent',
+  '/storage/emulated/0/WhatsApp/Media/WhatsApp Images/Private',
+  '/storage/emulated/0/WhatsApp/Media/.Statuses',
+  '/storage/emulated/0/Android/media',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/Sent',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/Private',
+  '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/.Statuses',
+  '/storage/emulated/0/Telegram',
+  '/storage/emulated/0/Telegram/Telegram Images',
 ];
 
 /**
@@ -111,6 +131,26 @@ const normalizePath = (rawPath = '') => {
 };
 
 /**
+ * Extension Matcher for Images (Handles normal extensions + .trashed files)
+ */
+const isImageFileName = (filename = '') => {
+  const lower = (filename || '').toLowerCase();
+  const lastDot = lower.lastIndexOf('.');
+  const ext = lastDot !== -1 ? lower.substring(lastDot) : '';
+
+  if (IMAGE_EXTENSIONS.includes(ext)) {
+    return true;
+  }
+
+  // Support system .trashed files containing image formats
+  if (lower.includes('.trashed') && (lower.includes('jpg') || lower.includes('jpeg') || lower.includes('png') || lower.includes('webp') || lower.includes('heic'))) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
  * Force MediaScanner Refresh for Key Directories (Documents, Download, etc.)
  * Ensures freshly copied or moved images are instantly indexed and accessible.
  */
@@ -122,6 +162,9 @@ const forceMediaScannerRefresh = async (RNFS) => {
     '/storage/emulated/0/Download',
     '/storage/emulated/0/Pictures',
     '/storage/emulated/0/DCIM',
+    '/storage/emulated/0/Music',
+    '/storage/emulated/0/Ringtones',
+    '/storage/emulated/0/SHAREit',
   ];
 
   for (const dirPath of refreshTargets) {
@@ -136,7 +179,7 @@ const forceMediaScannerRefresh = async (RNFS) => {
 /**
  * Recursive Directory Traversal for Image Scanning (Universal Deep Traversal)
  * Scans directories and subfolders recursively up to maxDepth (15 levels).
- * Includes Documents/, Download/, WhatsApp/Media, PhotoEditor, DCIM, Pictures, etc.
+ * Includes Documents/, Download/, WhatsApp/Media, Sent, Private, .Statuses, SHAREit, .status, .thumbnails, Pictures, DCIM, etc.
  */
 const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0, maxDepth = 15) => {
   if (depth > maxDepth) return;
@@ -147,13 +190,11 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
 
     for (const item of items) {
       try {
-        if (item.name.startsWith('.')) continue;
-
         const lowerPath = (item.path || '').toLowerCase();
-        // Skip hidden/system caches and restricted Android/data
+        
+        // Skip ONLY restricted Android/data (throws OS exception on Android 11+) and .cache/.pending
+        // DO NOT SKIP .thumbnails, .Statuses, .status, Sent, Private, or .trashed files!
         if (
-          lowerPath.includes('/.trash') ||
-          lowerPath.includes('/.thumbnails') ||
           lowerPath.includes('/.cache') ||
           lowerPath.includes('/.pending') ||
           lowerPath.includes('/android/data')
@@ -165,10 +206,7 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
         const isFile = typeof item.isFile === 'function' ? item.isFile() : !isDirectory;
 
         if (isFile) {
-          const lastDot = item.name.lastIndexOf('.');
-          const ext = lastDot !== -1 ? item.name.substring(lastDot).toLowerCase() : '';
-
-          if (IMAGE_EXTENSIONS.includes(ext)) {
+          if (isImageFileName(item.name)) {
             const filePath = normalizePath(item.path || '');
             if (!filePath || scannedFilesMap.has(filePath)) continue;
 
@@ -182,6 +220,9 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
 
             if (fileSize > 0) {
               const fileTimestamp = item.mtime ? new Date(item.mtime).getTime() : Date.now();
+              const lastDot = item.name.lastIndexOf('.');
+              const ext = lastDot !== -1 ? item.name.substring(lastDot).toLowerCase() : '.jpg';
+
               scannedFilesMap.set(filePath, {
                 id: filePath,
                 name: item.name,
@@ -211,7 +252,7 @@ const scanDirectoryRecursive = async (RNFS, dirPath, scannedFilesMap, depth = 0,
  * Main Exhaustive Image Scanner Function
  * Combines Native Android MediaStore index query + Physical Filesystem Recursive Crawler
  * Crawls ALL internal storage folders (/storage/emulated/0/) recursively including
- * Documents/, Download/, WhatsApp/Media, PhotoEditor, Pictures/, DCIM/, and all subdirectories.
+ * Documents/, Download/, WhatsApp/Media, Sent, Private, .Statuses, SHAREit, .status, .thumbnails, Music, Ringtones, DCIM, Pictures, and all subdirectories.
  * 
  * @returns {Promise<Array<Object>>} List of fetched raw image objects
  */
@@ -219,7 +260,7 @@ export const scanImageFiles = async () => {
   await ensureImagePermission();
   const scannedFilesMap = new Map();
 
-  console.log('[ImageScanner] Starting Universal Dual-Engine Traversal for Images (MediaStore Query + Filesystem Crawler)...');
+  console.log('[ImageScanner] Starting Universal Exhaustive Dual-Engine Image Scan...');
 
   // Step 1: Query Native Android MediaStore for instant complete device indexing
   try {
@@ -245,7 +286,7 @@ export const scanImageFiles = async () => {
     console.warn('[ImageScanner] Native MediaStore query warning:', nativeScanErr);
   }
 
-  // Step 2: Physical Filesystem Crawler (RNFS) for un-indexed or newly created copies
+  // Step 2: Physical Filesystem Crawler (RNFS) for un-indexed, hidden dot folders (.thumbnails, .Statuses, .status), or newly created copies
   try {
     const RNFS = NativeModules.RNFSManager || NativeModules.RNFS;
 
@@ -262,7 +303,7 @@ export const scanImageFiles = async () => {
         console.warn('[ImageScanner] Root scan warning, proceeding to folder list scan:', rootErr);
       }
 
-      // Traversal of key target folders (Documents/, Download/, WhatsApp/, PhotoEditor, etc.)
+      // Traversal of all key target folders (Documents/, Download/, WhatsApp/, Sent, Private, .Statuses, SHAREit, .status, .thumbnails, Music, Ringtones, etc.)
       for (const rootDir of IMAGE_STORAGE_PATHS) {
         await scanDirectoryRecursive(RNFS, rootDir, scannedFilesMap, 0, 15);
       }
