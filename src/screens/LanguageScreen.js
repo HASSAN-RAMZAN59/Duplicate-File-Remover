@@ -139,15 +139,12 @@ export const LanguageScreen = ({ navigation }) => {
     // 1. Save selected language
     await storageService.setItem(STORAGE_KEYS.SELECTED_LANGUAGE, selectedLanguage);
 
-    // 2. Check permissions & onboarding status to determine next route
+    // 2. Check permissions status
     const permissionsResult = await permissionService.checkAllPermissions();
-    const isOnboardingDone = await storageService.isOnboardingCompleted();
 
-    let targetRoute = ROUTES.MAIN_DRAWER;
+    let targetRoute = ROUTES.ONBOARDING;
     if (!permissionsResult.areAllGranted) {
       targetRoute = ROUTES.PERMISSIONS;
-    } else if (!isOnboardingDone) {
-      targetRoute = ROUTES.ONBOARDING;
     }
 
     navigation.reset({
@@ -155,6 +152,7 @@ export const LanguageScreen = ({ navigation }) => {
       routes: [{ name: targetRoute }],
     });
   };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
