@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-na
 import { usePermissions } from '../hooks/usePermissions';
 import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
-import { storageService } from '../services/storageService';
+
 
 export const PermissionScreen = ({ navigation }) => {
   const {
@@ -15,21 +15,13 @@ export const PermissionScreen = ({ navigation }) => {
     openSettings,
   } = usePermissions();
 
-  const handleContinue = async () => {
-    const isOnboardingDone = await storageService.isOnboardingCompleted();
-
-    if (!isOnboardingDone) {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: ROUTES.ONBOARDING }],
-      });
-    } else {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: ROUTES.MAIN_DRAWER }],
-      });
-    }
+  const handleContinue = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: ROUTES.MAIN_DRAWER }],
+    });
   };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>

@@ -142,10 +142,11 @@ export const LanguageScreen = ({ navigation }) => {
     // 2. Check permissions status
     const permissionsResult = await permissionService.checkAllPermissions();
 
-    let targetRoute = ROUTES.ONBOARDING;
+    let targetRoute = ROUTES.MAIN_DRAWER;
     if (!permissionsResult.areAllGranted) {
       targetRoute = ROUTES.PERMISSIONS;
     }
+
 
     navigation.reset({
       index: 0,

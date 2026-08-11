@@ -2,7 +2,6 @@ export const ROUTES = {
   SPLASH: 'Splash',
   LANGUAGE: 'Language',
   PERMISSIONS: 'Permissions',
-  ONBOARDING: 'Onboarding',
   MAIN_DRAWER: 'MainDrawer',
   HOME: 'Home',
   DEEP_SCAN: 'DeepScan',
@@ -12,4 +11,5 @@ export const ROUTES = {
   DUPLICATE_VIEWER: 'DuplicateViewer',
   FILE_DETAIL: 'FileDetail',
 };
+
 

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar, Easing } from 'react-native';
-import { storageService } from '../services/storageService';
-import { permissionService } from '../services/permissionService';
 import { ROUTES } from '../navigation/routes';
+
+
 
 export const SplashScreen = ({ navigation }) => {
   const progressAnim = useRef(new Animated.Value(0)).current;

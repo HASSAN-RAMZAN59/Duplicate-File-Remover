@@ -49,19 +49,5 @@ export const storageService = {
       return false;
     }
   },
-
-  /**
-   * Check if onboarding has been completed
-   */
-  isOnboardingCompleted: async () => {
-    const val = await storageService.getItem(STORAGE_KEYS.IS_ONBOARDING_COMPLETED);
-    return val === true || val === 'true';
-  },
-
-  /**
-   * Mark onboarding as completed
-   */
-  setOnboardingCompleted: async () => {
-    return await storageService.setItem(STORAGE_KEYS.IS_ONBOARDING_COMPLETED, 'true');
-  },
 };
+
