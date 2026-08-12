@@ -65,6 +65,9 @@ export const LanguageScreen = ({ navigation }) => {
       await updateSetting('language', langObj.name);
     }
 
+    // Reset onboarding completed flag so all 3 onboarding slides play after permission screen
+    await storageService.setItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING, false);
+
     // 2. Navigate to Permissions screen next
     navigation.reset({
       index: 0,
