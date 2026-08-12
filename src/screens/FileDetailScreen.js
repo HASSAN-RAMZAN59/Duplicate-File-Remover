@@ -18,10 +18,14 @@ import {
 import FileViewer from 'react-native-file-viewer';
 import RNShare from 'react-native-share';
 import { formatBytes } from '../engine/hashEngine';
-import { deleteFileFromDevice } from '../engine/fileScanner';
+import { deleteSelectedFiles } from '../engine/fileDeleter';
 import { VideoThumbnail } from '../components/VideoThumbnail';
 import { ROUTES } from '../navigation/routes';
 import BackArrowSvg from '../assets/back arrow.svg';
+import CopySvg from '../assets/preview/copy.svg';
+import OpenSvg from '../assets/preview/open.svg';
+import ShareSvg from '../assets/preview/share.svg';
+import DeleteSvg from '../assets/preview/delete.svg';
 
 /**
  * Helper to determine accurate MIME type for cross-app file opening and sharing
@@ -226,7 +230,8 @@ export const FileDetailScreen = ({ route, navigation }) => {
           onPress: async () => {
             setIsDeleting(true);
             try {
-              const success = await deleteFileFromDevice(file.path);
+              const result = await deleteSelectedFiles([{ path: file.path, size: file.size || 0 }]);
+              const success = result.success && result.deletedCount > 0;
               setIsDeleting(false);
 
               if (success) {
@@ -305,7 +310,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
             onPress={handleCopyLocation}
             activeOpacity={0.7}
           >
-            <Text style={styles.copyIcon}>📄</Text>
+            <CopySvg width={18} height={18} style={{ marginRight: 8 }} />
             <Text style={styles.copyButtonText}>
               {copiedToast ? 'Location Copied!' : 'Copy File Location'}
             </Text>
@@ -316,7 +321,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
             {/* Open File */}
             <TouchableOpacity style={styles.actionItem} onPress={handleOpenFile} activeOpacity={0.8}>
               <View style={styles.actionCircleBtn}>
-                <View style={styles.whitePlaceholderIcon} />
+                <OpenSvg width={24} height={24} />
               </View>
               <Text style={styles.actionItemLabel}>Open File</Text>
             </TouchableOpacity>
@@ -324,7 +329,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
             {/* Share */}
             <TouchableOpacity style={styles.actionItem} onPress={handleShareFile} activeOpacity={0.8}>
               <View style={styles.actionCircleBtn}>
-                <View style={styles.whitePlaceholderIcon} />
+                <ShareSvg width={24} height={24} />
               </View>
               <Text style={styles.actionItemLabel}>Share</Text>
             </TouchableOpacity>
@@ -337,7 +342,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
               activeOpacity={0.8}
             >
               <View style={styles.actionCircleBtn}>
-                <View style={styles.whitePlaceholderIcon} />
+                <DeleteSvg width={24} height={24} />
               </View>
               <Text style={styles.actionItemLabel}>Delete</Text>
             </TouchableOpacity>
@@ -375,7 +380,7 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '500',
     color: '#D1D5DB',
   },

@@ -480,7 +480,9 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                 <ActivityIndicator size="small" color="#991B1B" />
               ) : (
                 <View style={styles.deleteButtonContentRow}>
-                  <DelIconSvg width={14} height={15} style={{ marginRight: 6 }} />
+                  {!isContacts && (
+                    <DelIconSvg width={14} height={15} style={{ marginRight: 6 }} />
+                  )}
                   <Text style={styles.deletePillButtonText}>
                     {isContacts ? 'Merge Selected' : 'Delete Selected'}
                   </Text>

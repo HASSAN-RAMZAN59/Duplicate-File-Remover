@@ -84,7 +84,11 @@ const getCategoryIcon = (name) => {
     return <DocumentsCategorySvg width={44} height={44} />;
   }
   if (norm.includes('contact')) {
-    return <Image source={ContactsCategoryImage} style={{ width: 44, height: 44 }} resizeMode="contain" />;
+    return (
+      <View style={{ width: 44, height: 44, backgroundColor: 'rgba(182, 68, 23, 0.2)', borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}>
+        <Image source={require('../assets/full scan/Vector.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />
+      </View>
+    );
   }
   if (norm.includes('other')) {
     return <OthersCategorySvg width={44} height={44} />;
