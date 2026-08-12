@@ -3,10 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SETTINGS_STORAGE_KEY = '@app_settings_v1';
 
 export const DEFAULT_SETTINGS = {
+  language: 'English',
+  ignoreSmallFiles: false,
+  automaticScanning: 'Weekly',
   autoScan: true,
   smartMatching: true,
-  ignoreSmallFiles: false,
-  notifyDuplicates: true,
   autoSelectOldest: true,
 };
 

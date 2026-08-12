@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
+import SettingSvg from '../assets/setting.svg';
 
 const CATEGORIES = [
   { id: 'images', name: 'Images', icon: '🖼️' },
@@ -37,7 +38,16 @@ export const HomeScreen = ({ navigation }) => {
     <SafeAreaView style={styles.safeArea}>
       {/* Top Header */}
       <View style={styles.header}>
+        <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>Duplicate File Remover</Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate(ROUTES.SETTINGS)}
+          activeOpacity={0.7}
+          accessibilityLabel="Open Settings"
+        >
+          <SettingSvg width={21} height={20} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.container}>
@@ -79,11 +89,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.cardBorder || '#1E293B',
+  },
+  headerSpacer: {
+    width: 36,
+  },
+  settingsButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,

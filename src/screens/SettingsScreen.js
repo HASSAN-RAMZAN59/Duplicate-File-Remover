@@ -7,16 +7,22 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
+  StatusBar,
+  Modal,
+  TouchableWithoutFeedback,
   ToastAndroid,
   Platform,
+  Linking,
 } from 'react-native';
-import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
 import { loadSettings, updateSetting, DEFAULT_SETTINGS } from '../services/settingsService';
+
+const AUTO_SCAN_OPTIONS = ['Off', 'Daily', 'Weekly', 'Monthly'];
 
 export const SettingsScreen = ({ navigation }) => {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isAutoScanModalVisible, setIsAutoScanModalVisible] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -27,133 +33,189 @@ export const SettingsScreen = ({ navigation }) => {
         setIsLoaded(true);
       }
     };
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchSettings();
+    });
+
     fetchSettings();
     return () => {
       isMounted = false;
+      unsubscribe();
     };
-  }, []);
+  }, [navigation]);
 
   const handleToggle = async (key, value) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     await updateSetting(key, value);
     if (Platform.OS === 'android' && ToastAndroid) {
-      ToastAndroid.show(`Setting updated: ${key} = ${value ? 'ON' : 'OFF'}`, ToastAndroid.SHORT);
+      ToastAndroid.show(`Setting updated`, ToastAndroid.SHORT);
+    }
+  };
+
+  const handleSelectAutoScan = async (option) => {
+    await handleToggle('automaticScanning', option);
+    setIsAutoScanModalVisible(false);
+  };
+
+  const handleRateUs = () => {
+    if (Platform.OS === 'android' && ToastAndroid) {
+      ToastAndroid.show('Thank you for supporting us!', ToastAndroid.SHORT);
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
+      <StatusBar barStyle="light-content" backgroundColor="#1E1E1E" translucent={false} />
+
+      {/* Top Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.navigate(ROUTES.HOME)}
+          onPress={() => navigation.goBack()}
           activeOpacity={0.7}
-          accessibilityLabel="Go Back to Home"
+          accessibilityLabel="Go Back"
         >
-          <Text style={styles.backIconText}>←</Text>
+          <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>App Settings</Text>
-        <View style={{ width: 44 }} />
+        <Text style={styles.headerTitle}>Setting</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionHeader}>Scanning Preferences</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* SECTION 1: GENERAL */}
+        <Text style={styles.sectionHeader}>GENERAL</Text>
+        <View style={styles.cardContainer}>
+          {/* Language */}
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate(ROUTES.LANGUAGE)}
+          >
+            <View style={styles.placeholderBox} />
+            <View style={styles.labelContainer}>
+              <Text style={styles.rowTitle}>Language</Text>
+            </View>
+            <View style={styles.valueGroup}>
+              <Text style={styles.valueText}>{settings.language || 'English'}</Text>
+              <Text style={styles.chevron}>›</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
-        <View style={styles.settingCard}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>Auto Background Scan</Text>
-              <Text style={styles.settingDesc}>Periodically check storage for new duplicates</Text>
+        {/* SECTION 2: SCANNING SETTINGS */}
+        <Text style={styles.sectionHeader}>SCANNING SETTINGS</Text>
+        <View style={styles.cardContainer}>
+          {/* Ignore Small Files */}
+          <View style={styles.row}>
+            <View style={styles.placeholderBox} />
+            <View style={styles.labelContainer}>
+              <Text style={styles.rowTitle}>Ignore Small Files</Text>
+              <Text style={styles.rowSubtitle}>Exclude files under 1MB</Text>
             </View>
             <Switch
-              value={settings.autoScan}
-              onValueChange={(val) => handleToggle('autoScan', val)}
-              trackColor={{ false: '#334155', true: COLORS.primary }}
-              thumbColor={COLORS.white}
-              disabled={!isLoaded}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>Smart Content Matching (MD5)</Text>
-              <Text style={styles.settingDesc}>Use MD5 checksums & dimensions for 100% duplicate accuracy</Text>
-            </View>
-            <Switch
-              value={settings.smartMatching}
-              onValueChange={(val) => handleToggle('smartMatching', val)}
-              trackColor={{ false: '#334155', true: COLORS.primary }}
-              thumbColor={COLORS.white}
-              disabled={!isLoaded}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>Ignore Files Under 100 KB</Text>
-              <Text style={styles.settingDesc}>Skip small thumbnails & tiny cache items (&lt;100 KB)</Text>
-            </View>
-            <Switch
-              value={settings.ignoreSmallFiles}
+              value={!!settings.ignoreSmallFiles}
               onValueChange={(val) => handleToggle('ignoreSmallFiles', val)}
-              trackColor={{ false: '#334155', true: COLORS.primary }}
-              thumbColor={COLORS.white}
-              disabled={!isLoaded}
-            />
-          </View>
-        </View>
-
-        <Text style={styles.sectionHeader}>Notifications & Selection Rules</Text>
-        <View style={styles.settingCard}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>High Junk Space Alerts</Text>
-              <Text style={styles.settingDesc}>Notify when duplicate files exceed 1 GB</Text>
-            </View>
-            <Switch
-              value={settings.notifyDuplicates}
-              onValueChange={(val) => handleToggle('notifyDuplicates', val)}
-              trackColor={{ false: '#334155', true: COLORS.primary }}
-              thumbColor={COLORS.white}
+              trackColor={{ false: '#3F3F46', true: '#306FFF' }}
+              thumbColor="#FFFFFF"
               disabled={!isLoaded}
             />
           </View>
 
           <View style={styles.divider} />
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>Auto-Select Oldest File as Safe</Text>
-              <Text style={styles.settingDesc}>Always keep oldest created file safe (unchecked)</Text>
+          {/* Automatic Scanning */}
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.7}
+            onPress={() => setIsAutoScanModalVisible(true)}
+          >
+            <View style={styles.placeholderBox} />
+            <View style={styles.labelContainer}>
+              <Text style={styles.rowTitle}>Automatic Scanning</Text>
             </View>
-            <Switch
-              value={settings.autoSelectOldest}
-              onValueChange={(val) => handleToggle('autoSelectOldest', val)}
-              trackColor={{ false: '#334155', true: COLORS.primary }}
-              thumbColor={COLORS.white}
-              disabled={!isLoaded}
-            />
-          </View>
+            <View style={styles.valueGroup}>
+              <Text style={styles.valueText}>{settings.automaticScanning || 'Weekly'}</Text>
+              <Text style={styles.chevron}>›</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionHeader}>System Info</Text>
-        <View style={styles.settingCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>App Version</Text>
-            <Text style={styles.infoValue}>1.0.0 (Build 1001)</Text>
-          </View>
+        {/* SECTION 3: SUPPORT & ABOUT */}
+        <Text style={styles.sectionHeader}>SUPPORT & ABOUT</Text>
+        <View style={styles.cardContainer}>
+          {/* Rate Us */}
+          <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={handleRateUs}>
+            <View style={styles.placeholderBox} />
+            <View style={styles.labelContainer}>
+              <Text style={styles.rowTitle}>Rate Us</Text>
+            </View>
+            <Text style={styles.externalIcon}>↗</Text>
+          </TouchableOpacity>
+
           <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Scan Engine</Text>
-            <Text style={styles.infoValue}>v2.4 High Performance</Text>
+
+          {/* Privacy Policy */}
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate(ROUTES.PRIVACY_POLICY)}
+          >
+            <View style={styles.placeholderBox} />
+            <View style={styles.labelContainer}>
+              <Text style={styles.rowTitle}>Privacy Policy</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          {/* Version */}
+          <View style={styles.row}>
+            <View style={styles.placeholderBox} />
+            <View style={styles.labelContainer}>
+              <Text style={styles.rowTitle}>Version</Text>
+            </View>
+            <Text style={styles.versionText}>v1.0.0</Text>
           </View>
         </View>
       </ScrollView>
+
+      {/* Automatic Scanning Frequency Selection Modal */}
+      <Modal
+        visible={isAutoScanModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsAutoScanModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setIsAutoScanModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Automatic Scanning</Text>
+                <Text style={styles.modalSubtitle}>Select scan frequency</Text>
+
+                {AUTO_SCAN_OPTIONS.map((option) => {
+                  const isSelected = (settings.automaticScanning || 'Weekly') === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.optionRow, isSelected && styles.optionRowSelected]}
+                      onPress={() => handleSelectAutoScan(option)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                        {option}
+                      </Text>
+                      {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -161,94 +223,158 @@ export const SettingsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#121212',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+    borderBottomColor: '#1E1E22',
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.cardBackground,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryLight + '60',
   },
-  backIconText: {
+  backArrow: {
     fontSize: 22,
-    color: COLORS.textPrimary,
-    fontWeight: 'bold',
-    lineHeight: 24,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  content: {
-    padding: 20,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   sectionHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-    marginTop: 8,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#E5E2E1',
+    letterSpacing: 1.2,
+    marginTop: 20,
+    marginBottom: 8,
   },
-  settingCard: {
-    backgroundColor: COLORS.cardBackground,
+  cardContainer: {
+    backgroundColor: '#191C1D',
     borderRadius: 16,
-    padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    marginBottom: 20,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderColor: '#2A2A2E',
+    paddingHorizontal: 16,
     paddingVertical: 6,
   },
-  settingTextGroup: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  placeholderBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#2A2A2E',
+    marginRight: 14,
+  },
+  labelContainer: {
     flex: 1,
-    paddingRight: 16,
   },
-  settingTitle: {
+  rowTitle: {
     fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
-  settingDesc: {
+  rowSubtitle: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  valueGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  valueText: {
+    fontSize: 14,
+    color: '#E5E2E1',
+    marginRight: 6,
+  },
+  chevron: {
+    fontSize: 18,
+    color: '#E5E2E1',
+    fontWeight: '400',
+  },
+  externalIcon: {
+    fontSize: 16,
+    color: '#E5E2E1',
+  },
+  versionText: {
+    fontSize: 14,
+    color: '#E5E2E1',
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.cardBorder,
-    marginVertical: 12,
+    backgroundColor: '#2A2A2E',
   },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  /* Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingHorizontal: 24,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#191C1D',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#2A2A2E',
   },
-  infoValue: {
-    fontSize: 14,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#E5E2E1',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    marginBottom: 18,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: '#161618',
+  },
+  optionRowSelected: {
+    backgroundColor: '#191C1D',
+    borderWidth: 1,
+    borderColor: '#E5E2E1',
+  },
+  optionText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#D4D4D8',
+  },
+  optionTextSelected: {
+    color: '#E5E2E1',
     fontWeight: '600',
-    color: COLORS.primaryLight,
+  },
+  checkmark: {
+    fontSize: 16,
+    color: '#E5E2E1',
+    fontWeight: 'bold',
   },
 });
