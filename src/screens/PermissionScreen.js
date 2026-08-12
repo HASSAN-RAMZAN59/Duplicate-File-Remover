@@ -8,39 +8,102 @@ import {
   ScrollView,
   Switch,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { usePermissions } from '../hooks/usePermissions';
+import { permissionService } from '../services/permissionService';
 import { ROUTES } from '../navigation/routes';
+import MainPermissionSvg from '../assets/permsiion/main.svg';
+import ContactPermissionSvg from '../assets/permsiion/contact.svg';
+import MusicPermissionSvg from '../assets/permsiion/music.svg';
+import PhotoPermissionSvg from '../assets/permsiion/photo.svg';
 
 export const PermissionScreen = ({ navigation }) => {
   const {
+    isAudioGranted,
+    isPhotosGranted,
     isStorageGranted,
     isContactsGranted,
     areAllPermissionsGranted,
-    requestStorage,
+    requestAudio,
+    requestPhotos,
     requestContacts,
     openSettings,
   } = usePermissions();
 
-  const handleContinue = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: ROUTES.HOME }],
-    });
+  const handleContinue = async () => {
+    if (!areAllPermissionsGranted) {
+      if (!isContactsGranted) {
+        const resContacts = await requestContacts();
+        if (resContacts === 'BLOCKED') {
+          await openSettings();
+          return;
+        }
+      }
+      if (!isAudioGranted) {
+        const resAudio = await requestAudio();
+        if (resAudio === 'BLOCKED') {
+          await openSettings();
+          return;
+        }
+      }
+      if (!isPhotosGranted) {
+        const resPhotos = await requestPhotos();
+        if (resPhotos === 'BLOCKED') {
+          await openSettings();
+          return;
+        }
+      }
+    }
+
+    // Strict Check: Verify all 3 permissions with permissionService
+    const checkResults = await permissionService.checkAllPermissions();
+    if (checkResults.areAllGranted) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: ROUTES.HOME }],
+      });
+    } else {
+      Alert.alert(
+        'Permissions Required',
+        'All 3 permissions (Contacts, Music & Audio, Photos & Videos) must be granted to continue.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: openSettings },
+        ]
+      );
+    }
   };
 
   const handleToggleContacts = async (value) => {
     if (value && !isContactsGranted) {
-      await requestContacts();
+      const status = await requestContacts();
+      if (status === 'BLOCKED' || status === 'UNAVAILABLE') {
+        await openSettings();
+      }
     } else if (!value && isContactsGranted) {
       await openSettings();
     }
   };
 
-  const handleToggleStorage = async (value) => {
-    if (value && !isStorageGranted) {
-      await requestStorage();
-    } else if (!value && isStorageGranted) {
+  const handleToggleAudio = async (value) => {
+    if (value && !isAudioGranted) {
+      const status = await requestAudio();
+      if (status === 'BLOCKED' || status === 'UNAVAILABLE') {
+        await openSettings();
+      }
+    } else if (!value && isAudioGranted) {
+      await openSettings();
+    }
+  };
+
+  const handleTogglePhotos = async (value) => {
+    if (value && !isPhotosGranted) {
+      const status = await requestPhotos();
+      if (status === 'BLOCKED' || status === 'UNAVAILABLE') {
+        await openSettings();
+      }
+    } else if (!value && isPhotosGranted) {
       await openSettings();
     }
   };
@@ -55,9 +118,7 @@ export const PermissionScreen = ({ navigation }) => {
 
         {/* App Badge Header */}
         <View style={styles.badgeSection}>
-          <View style={styles.appIconBadge}>
-            <Text style={styles.androidIconText}>🤖</Text>
-          </View>
+          <MainPermissionSvg width={64} height={64} />
           <Text style={styles.appNameText}>Duplicate File Remover</Text>
         </View>
 
@@ -69,7 +130,9 @@ export const PermissionScreen = ({ navigation }) => {
           activeOpacity={0.8}
           onPress={() => handleToggleContacts(!isContactsGranted)}
         >
-          <View style={styles.whitePlaceholderBox} />
+          <View style={styles.iconWrapper}>
+            <ContactPermissionSvg width={44} height={44} />
+          </View>
           <View style={styles.labelContainer}>
             <Text style={styles.cardTitle}>Contacts</Text>
             <Text style={styles.cardSubtitle}>
@@ -88,9 +151,11 @@ export const PermissionScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.8}
-          onPress={() => handleToggleStorage(!isStorageGranted)}
+          onPress={() => handleToggleAudio(!isAudioGranted)}
         >
-          <View style={styles.whitePlaceholderBox} />
+          <View style={styles.iconWrapper}>
+            <MusicPermissionSvg width={44} height={44} />
+          </View>
           <View style={styles.labelContainer}>
             <Text style={styles.cardTitle}>Music & Audio</Text>
             <Text style={styles.cardSubtitle}>
@@ -98,8 +163,8 @@ export const PermissionScreen = ({ navigation }) => {
             </Text>
           </View>
           <Switch
-            value={isStorageGranted}
-            onValueChange={handleToggleStorage}
+            value={isAudioGranted}
+            onValueChange={handleToggleAudio}
             trackColor={{ false: '#3F3F46', true: '#306FFF' }}
             thumbColor="#FFFFFF"
           />
@@ -109,9 +174,11 @@ export const PermissionScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.8}
-          onPress={() => handleToggleStorage(!isStorageGranted)}
+          onPress={() => handleTogglePhotos(!isPhotosGranted)}
         >
-          <View style={styles.whitePlaceholderBox} />
+          <View style={styles.iconWrapper}>
+            <PhotoPermissionSvg width={44} height={44} />
+          </View>
           <View style={styles.labelContainer}>
             <Text style={styles.cardTitle}>Photos & Videos</Text>
             <Text style={styles.cardSubtitle}>
@@ -119,8 +186,8 @@ export const PermissionScreen = ({ navigation }) => {
             </Text>
           </View>
           <Switch
-            value={isStorageGranted}
-            onValueChange={handleToggleStorage}
+            value={isPhotosGranted}
+            onValueChange={handleTogglePhotos}
             trackColor={{ false: '#3F3F46', true: '#306FFF' }}
             thumbColor="#FFFFFF"
           />
@@ -133,6 +200,7 @@ export const PermissionScreen = ({ navigation }) => {
         <TouchableOpacity
           style={[styles.continueButton, !areAllPermissionsGranted && styles.disabledButton]}
           onPress={handleContinue}
+          disabled={!areAllPermissionsGranted}
           activeOpacity={0.8}
         >
           <Text style={styles.continueButtonText}>Continue</Text>
@@ -193,11 +261,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 14,
   },
-  whitePlaceholderBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+  iconWrapper: {
     marginRight: 14,
   },
   labelContainer: {
@@ -225,7 +289,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   disabledButton: {
-    backgroundColor: '#306FFF60',
+    backgroundColor: '#2A2A2A',
     opacity: 0.8,
   },
   continueButtonText: {

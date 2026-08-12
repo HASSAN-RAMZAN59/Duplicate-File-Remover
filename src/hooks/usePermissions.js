@@ -7,6 +7,8 @@ import {
 } from '../services/permissionService';
 
 export function usePermissions() {
+  const [audioStatus, setAudioStatus] = useState(PERMISSION_STATUS.DENIED);
+  const [photosStatus, setPhotosStatus] = useState(PERMISSION_STATUS.DENIED);
   const [storageStatus, setStorageStatus] = useState(PERMISSION_STATUS.DENIED);
   const [contactsStatus, setContactsStatus] = useState(PERMISSION_STATUS.DENIED);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,7 +17,8 @@ export function usePermissions() {
     setIsLoading(true);
     try {
       const results = await permissionService.checkAllPermissions();
-      setStorageStatus(results.storage);
+      setAudioStatus(results.audio);
+      setPhotosStatus(results.photos);
       setContactsStatus(results.contacts);
     } catch (error) {
       console.error('[usePermissions] Error refreshing permissions:', error);
@@ -39,6 +42,18 @@ export function usePermissions() {
     };
   }, [refreshPermissions]);
 
+  const requestAudio = async () => {
+    const res = await permissionService.requestPermission(PERMISSION_TYPES.AUDIO);
+    setAudioStatus(res);
+    return res;
+  };
+
+  const requestPhotos = async () => {
+    const res = await permissionService.requestPermission(PERMISSION_TYPES.PHOTOS);
+    setPhotosStatus(res);
+    return res;
+  };
+
   const requestStorage = async () => {
     const res = await permissionService.requestPermission(PERMISSION_TYPES.STORAGE);
     setStorageStatus(res);
@@ -55,17 +70,30 @@ export function usePermissions() {
     await permissionService.openAppSettings();
   };
 
+  const isAudioGranted = audioStatus === PERMISSION_STATUS.GRANTED;
+  const isPhotosGranted = photosStatus === PERMISSION_STATUS.GRANTED;
   const isStorageGranted = storageStatus === PERMISSION_STATUS.GRANTED;
   const isContactsGranted = contactsStatus === PERMISSION_STATUS.GRANTED;
-  const areAllPermissionsGranted = isStorageGranted && isContactsGranted;
+
+  const isAudioOk = isAudioGranted || isStorageGranted;
+  const isPhotosOk = isPhotosGranted || isStorageGranted;
+  const isContactsOk = isContactsGranted;
+
+  const areAllPermissionsGranted = isAudioOk && isPhotosOk && isContactsOk;
 
   return {
+    audioStatus,
+    photosStatus,
     storageStatus,
     contactsStatus,
     isLoading,
+    isAudioGranted,
+    isPhotosGranted,
     isStorageGranted,
     isContactsGranted,
     areAllPermissionsGranted,
+    requestAudio,
+    requestPhotos,
     requestStorage,
     requestContacts,
     openSettings,

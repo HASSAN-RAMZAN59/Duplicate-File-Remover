@@ -9,6 +9,8 @@ import {
 
 export const PERMISSION_TYPES = {
   STORAGE: 'STORAGE',
+  AUDIO: 'AUDIO',
+  PHOTOS: 'PHOTOS',
   CONTACTS: 'CONTACTS',
 };
 
@@ -72,10 +74,43 @@ export const permissionService = {
   },
 
   /**
-   * Check status of storage permission with full Old & New Android version support.
+   * Check status of permission with full Old & New Android version support.
    */
   checkPermission: async (type) => {
     try {
+      if (type === PERMISSION_TYPES.AUDIO) {
+        if (Platform.OS === 'android') {
+          if (Platform.Version >= 33) {
+            const audRes = await check(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO);
+            return normalizeStatus(audRes);
+          } else {
+            const res = await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+            return normalizeStatus(res);
+          }
+        } else if (Platform.OS === 'ios') {
+          return PERMISSION_STATUS.GRANTED;
+        }
+      }
+
+      if (type === PERMISSION_TYPES.PHOTOS) {
+        if (Platform.OS === 'android') {
+          if (Platform.Version >= 33) {
+            const [imgRes, vidRes] = await Promise.all([
+              check(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES),
+              check(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO),
+            ]);
+            const isAnyGranted = isGrantedOrLimited(imgRes) || isGrantedOrLimited(vidRes);
+            return isAnyGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+          } else {
+            const res = await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+            return normalizeStatus(res);
+          }
+        } else if (Platform.OS === 'ios') {
+          const res = await check(PERMISSIONS.IOS.PHOTO_LIBRARY);
+          return normalizeStatus(res);
+        }
+      }
+
       if (type === PERMISSION_TYPES.STORAGE) {
         if (Platform.OS === 'android') {
           if (Platform.Version >= 33) {
@@ -133,10 +168,49 @@ export const permissionService = {
   },
 
   /**
-   * Request storage & contacts permissions sequentially on Android.
+   * Request permission sequentially on Android.
    */
   requestPermission: async (type) => {
     try {
+      if (type === PERMISSION_TYPES.AUDIO) {
+        if (Platform.OS === 'android') {
+          if (Platform.Version >= 33) {
+            const audRes = await request(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO);
+            return normalizeStatus(audRes);
+          } else {
+            const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+            return normalizeStatus(res);
+          }
+        } else if (Platform.OS === 'ios') {
+          return PERMISSION_STATUS.GRANTED;
+        }
+      }
+
+      if (type === PERMISSION_TYPES.PHOTOS) {
+        if (Platform.OS === 'android') {
+          if (Platform.Version >= 33) {
+            const imgRes = await request(PERMISSIONS.ANDROID.READ_MEDIA_IMAGES);
+            let vidRes = imgRes;
+            if (isGrantedOrLimited(imgRes)) {
+              try {
+                vidRes = await request(PERMISSIONS.ANDROID.READ_MEDIA_VIDEO);
+              } catch (e) {}
+            }
+            const isAnyGranted = isGrantedOrLimited(imgRes) || isGrantedOrLimited(vidRes);
+            if (isAnyGranted) {
+              return PERMISSION_STATUS.GRANTED;
+            }
+            return normalizeStatus(imgRes);
+          } else {
+            const res = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+            return normalizeStatus(res);
+          }
+        } else if (Platform.OS === 'ios') {
+          const res = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
+          return normalizeStatus(res);
+        }
+      }
+
       if (type === PERMISSION_TYPES.STORAGE) {
         if (Platform.OS === 'android') {
           if (Platform.Version >= 33) {
@@ -176,7 +250,6 @@ export const permissionService = {
 
       if (type === PERMISSION_TYPES.CONTACTS) {
         if (Platform.OS === 'android') {
-          // Request READ_CONTACTS first, then WRITE_CONTACTS sequentially
           const readRes = await request(PERMISSIONS.ANDROID.READ_CONTACTS);
           if (isGrantedOrLimited(readRes)) {
             try {
@@ -200,18 +273,22 @@ export const permissionService = {
   },
 
   /**
-   * Check both core permissions (Storage & Contacts)
+   * Check all permissions
    */
   checkAllPermissions: async () => {
-    const storageStatus = await permissionService.checkPermission(PERMISSION_TYPES.STORAGE);
+    const audioStatus = await permissionService.checkPermission(PERMISSION_TYPES.AUDIO);
+    const photosStatus = await permissionService.checkPermission(PERMISSION_TYPES.PHOTOS);
     const contactsStatus = await permissionService.checkPermission(PERMISSION_TYPES.CONTACTS);
 
+    const isAudioOk = audioStatus === PERMISSION_STATUS.GRANTED;
+    const isPhotosOk = photosStatus === PERMISSION_STATUS.GRANTED;
+    const isContactsOk = contactsStatus === PERMISSION_STATUS.GRANTED;
+
     return {
-      storage: storageStatus,
+      audio: audioStatus,
+      photos: photosStatus,
       contacts: contactsStatus,
-      areAllGranted:
-        storageStatus === PERMISSION_STATUS.GRANTED &&
-        contactsStatus === PERMISSION_STATUS.GRANTED,
+      areAllGranted: isAudioOk && isPhotosOk && isContactsOk,
     };
   },
 
