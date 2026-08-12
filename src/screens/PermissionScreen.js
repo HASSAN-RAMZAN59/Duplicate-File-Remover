@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { usePermissions } from '../hooks/usePermissions';
 import { permissionService } from '../services/permissionService';
+import { storageService } from '../services/storageService';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { ROUTES } from '../navigation/routes';
 import MainPermissionSvg from '../assets/permsiion/main.svg';
 import ContactPermissionSvg from '../assets/permsiion/contact.svg';
@@ -59,9 +61,13 @@ export const PermissionScreen = ({ navigation }) => {
     // Strict Check: Verify all 3 permissions with permissionService
     const checkResults = await permissionService.checkAllPermissions();
     if (checkResults.areAllGranted) {
+      const hasCompleted = await storageService.getItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING);
+      const isCompleted = hasCompleted === true || hasCompleted === 'true';
+      const targetRoute = isCompleted ? ROUTES.HOME : ROUTES.ONBOARDING;
+
       navigation.reset({
         index: 0,
-        routes: [{ name: ROUTES.HOME }],
+        routes: [{ name: targetRoute }],
       });
     } else {
       Alert.alert(

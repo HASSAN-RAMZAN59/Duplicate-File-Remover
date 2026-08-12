@@ -65,10 +65,10 @@ export const LanguageScreen = ({ navigation }) => {
       await updateSetting('language', langObj.name);
     }
 
-    // 2. Navigate to Onboarding (all 3 screens play)
+    // 2. Navigate to Permissions screen next
     navigation.reset({
       index: 0,
-      routes: [{ name: ROUTES.ONBOARDING }],
+      routes: [{ name: ROUTES.PERMISSIONS }],
     });
   };
 
