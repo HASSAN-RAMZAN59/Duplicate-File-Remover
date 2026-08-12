@@ -18,7 +18,7 @@ export const PermissionScreen = ({ navigation }) => {
   const handleContinue = () => {
     navigation.reset({
       index: 0,
-      routes: [{ name: ROUTES.MAIN_DRAWER }],
+      routes: [{ name: ROUTES.HOME }],
     });
   };
 

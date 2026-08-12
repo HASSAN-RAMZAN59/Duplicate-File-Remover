@@ -3,7 +3,6 @@ export const ROUTES = {
   LANGUAGE: 'Language',
   PERMISSIONS: 'Permissions',
   ONBOARDING: 'Onboarding',
-  MAIN_DRAWER: 'MainDrawer',
   HOME: 'Home',
   DEEP_SCAN: 'DeepScan',
   SETTINGS: 'Settings',

@@ -27,15 +27,15 @@ const SLIDES = [
   },
   {
     id: '2',
-    title: 'Clean Up Storage',
+    title: 'Organize Your Gallery',
     subtitle:
-      'Free up valuable device memory by removing duplicate files safely.',
+      'Sort Your files by category and keep your most important memories organized and easy to find',
   },
   {
     id: '3',
-    title: 'Organize Your Media',
+    title: 'Fast and Secure',
     subtitle:
-      'Keep your gallery, audio, and documents organized effortlessly.',
+      'Clean your device in seconds.Your personal files are always protected during the scan',
   },
 ];
 
@@ -43,18 +43,23 @@ export const OnboardingScreen = ({ navigation }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
 
-  const handleScroll = (event) => {
-    const contentOffsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.round(contentOffsetX / width);
-    if (index !== currentIndex && index >= 0 && index < SLIDES.length) {
-      setCurrentIndex(index);
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
+
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems && viewableItems.length > 0) {
+      const idx = viewableItems[0].index;
+      if (idx !== undefined && idx !== null) {
+        setCurrentIndex(idx);
+      }
     }
-  };
+  }).current;
 
   const finishOnboarding = async () => {
     const permissionsResult = await permissionService.checkAllPermissions();
 
-    let targetRoute = ROUTES.MAIN_DRAWER;
+    let targetRoute = ROUTES.HOME;
     if (!permissionsResult.areAllGranted) {
       targetRoute = ROUTES.PERMISSIONS;
     }
@@ -69,7 +74,6 @@ export const OnboardingScreen = ({ navigation }) => {
     if (currentIndex < SLIDES.length - 1) {
       const nextIdx = currentIndex + 1;
       flatListRef.current?.scrollToIndex({ index: nextIdx, animated: true });
-      setCurrentIndex(nextIdx);
     } else {
       finishOnboarding();
     }
@@ -116,8 +120,8 @@ export const OnboardingScreen = ({ navigation }) => {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         style={styles.flatList}
       />
 
