@@ -13,7 +13,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { ROUTES } from '../navigation/routes';
 import { runDeepScan } from '../engine/deepScanEngine';
 import { deleteBatch } from '../engine/fileDeleter';
@@ -22,7 +22,7 @@ import ImagesCategorySvg from '../assets/full scan/Overlay.svg';
 import VideosCategorySvg from '../assets/full scan/video.svg';
 import AudioCategorySvg from '../assets/full scan/audio.svg';
 import DocumentsCategorySvg from '../assets/full scan/document.svg';
-import ContactsCategoryImage from '../assets/full scan/Vector.png';
+import ContactsCategorySvg from '../assets/full scan/ful scan contact.svg';
 import OthersCategorySvg from '../assets/full scan/zip.svg';
 import LottieView from 'lottie-react-native';
 
@@ -70,7 +70,7 @@ const CircularProgressMeter = ({ valueString = '0 B' }) => {
           cy="50"
           r="45"
           stroke="#FFFFFF"
-          strokeWidth="3"
+          strokeWidth="6"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
@@ -104,9 +104,9 @@ const SmallProgressMeter = ({ isScanning = true, progress = 0 }) => {
   useEffect(() => {
     animatedProgress.setValue(0);
     const anim = Animated.timing(animatedProgress, {
-      toValue: 95,
-      duration: 3200,
-      easing: Easing.linear,
+      toValue: 99,
+      duration: 5000,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     });
     anim.start();
@@ -118,8 +118,8 @@ const SmallProgressMeter = ({ isScanning = true, progress = 0 }) => {
     if (progress >= 100) {
       Animated.timing(animatedProgress, {
         toValue: 100,
-        duration: 200,
-        easing: Easing.linear,
+        duration: 600,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }).start();
     }
@@ -180,8 +180,10 @@ const getCategoryIcon = (name) => {
   }
   if (norm.includes('contact')) {
     return (
-      <View style={{ width: 44, height: 44, backgroundColor: 'rgba(182, 68, 23, 0.2)', borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}>
-        <Image source={require('../assets/full scan/Vector.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />
+      <View style={{ width: 44, height: 44, backgroundColor: 'rgba(182, 68, 23, 0.2)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
+        <Svg width={20} height={20} viewBox="0 0 24 24">
+          <Path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#FF7B46" />
+        </Svg>
       </View>
     );
   }

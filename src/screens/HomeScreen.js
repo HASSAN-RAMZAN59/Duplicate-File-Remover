@@ -146,7 +146,7 @@ export const HomeScreen = ({ navigation }) => {
               cy="50" 
               r="45" 
               stroke="#FFFFFF" 
-              strokeWidth="3" 
+              strokeWidth="6" 
               fill="transparent" 
               strokeDasharray={circumference} 
               strokeDashoffset={strokeDashoffset} 
