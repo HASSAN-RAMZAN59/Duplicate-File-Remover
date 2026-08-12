@@ -9,12 +9,35 @@ import {
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
+import GroupSvg from '../assets/Group.svg';
+import Board2Svg from '../assets/board2.svg';
+import Board3Svg from '../assets/board3.svg';
+import ForwardSvg from '../assets/forward.svg';
 import { permissionService } from '../services/permissionService';
 import { ROUTES } from '../navigation/routes';
 
 const { width } = Dimensions.get('window');
 
-const SLIDES = [{ id: '1' }, { id: '2' }, { id: '3' }];
+const SLIDES = [
+  {
+    id: '1',
+    title: 'Find & Remove Duplicates',
+    subtitle:
+      'Quickly find duplicate photos, videos, and documents that are taking up unnecessary space.',
+  },
+  {
+    id: '2',
+    title: 'Clean Up Storage',
+    subtitle:
+      'Free up valuable device memory by removing duplicate files safely.',
+  },
+  {
+    id: '3',
+    title: 'Organize Your Media',
+    subtitle:
+      'Keep your gallery, audio, and documents organized effortlessly.',
+  },
+];
 
 export const OnboardingScreen = ({ navigation }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -54,14 +77,36 @@ export const OnboardingScreen = ({ navigation }) => {
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
-  const renderSlideItem = () => {
-    // Blank container for all slides as requested
-    return <View style={styles.slideContainer} />;
+  const renderSlideItem = ({ item }) => {
+    let IllustrationComponent = null;
+
+    if (item.id === '1') {
+      IllustrationComponent = <GroupSvg width={287.65} height={237.36} />;
+    } else if (item.id === '2') {
+      IllustrationComponent = (
+        <Board2Svg width={287.65} height={(287.65 * 200) / 351} />
+      );
+    } else if (item.id === '3') {
+      IllustrationComponent = (
+        <Board3Svg width={287.65} height={(287.65 * 163) / 365} />
+      );
+    }
+
+    return (
+      <View style={styles.slideContainer}>
+        <View style={styles.illustrationWrapper}>{IllustrationComponent}</View>
+
+        <View style={styles.textContainer}>
+          <Text style={styles.titleText}>{item.title}</Text>
+          <Text style={styles.subtitleText}>{item.subtitle}</Text>
+        </View>
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E1E1E" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="#121212" translucent={false} />
 
       <FlatList
         ref={flatListRef}
@@ -77,14 +122,32 @@ export const OnboardingScreen = ({ navigation }) => {
       />
 
       <View style={styles.footerContainer}>
+        {/* Pagination Indicators */}
+        <View style={styles.paginationContainer}>
+          {SLIDES.map((_, index) => {
+            const isActive = index === currentIndex;
+            return (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  isActive ? styles.activeDot : styles.inactiveDot,
+                ]}
+              />
+            );
+          })}
+        </View>
+
+        {/* Action Button */}
         <TouchableOpacity
           style={styles.actionButton}
           onPress={handleNext}
           activeOpacity={0.85}
         >
           <Text style={styles.buttonText}>
-            {isLastSlide ? 'Get Started →' : 'Next →'}
+            {isLastSlide ? 'Get Started' : 'Next'}
           </Text>
+          <ForwardSvg width={12} height={12} style={styles.buttonIcon} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -94,7 +157,7 @@ export const OnboardingScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#121212',
   },
   flatList: {
     flex: 1,
@@ -102,27 +165,78 @@ const styles = StyleSheet.create({
   slideContainer: {
     width: width,
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#121212',
+    alignItems: 'center',
+  },
+  illustrationWrapper: {
+    width: 287.65,
+    height: 237.36,
+    marginTop: 48,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  textContainer: {
+    marginTop: 40,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+  },
+  titleText: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  subtitleText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontWeight: '400',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   footerContainer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 135,
     width: '100%',
     alignItems: 'center',
   },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 4,
+  },
+  activeDot: {
+    width: 32,
+    backgroundColor: '#306FFF',
+  },
+  inactiveDot: {
+    width: 6,
+    backgroundColor: '#333336',
+  },
   actionButton: {
-    width: 358,
+    width: 300,
     height: 60,
     backgroundColor: '#306FFF',
     borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'center',
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  buttonIcon: {
+    marginLeft: 8,
+    marginTop: 2,
   },
 });
