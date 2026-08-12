@@ -283,7 +283,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                   });
 
                   Alert.alert(
-                    'Cleaned Successfully 🎉',
+                    'Cleaned Successfully ',
                     `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`
                   );
                 } else {
