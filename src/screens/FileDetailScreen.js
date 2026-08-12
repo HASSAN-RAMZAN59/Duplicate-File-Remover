@@ -21,6 +21,7 @@ import { formatBytes } from '../engine/hashEngine';
 import { deleteFileFromDevice } from '../engine/fileScanner';
 import { VideoThumbnail } from '../components/VideoThumbnail';
 import { ROUTES } from '../navigation/routes';
+import BackArrowSvg from '../assets/back arrow.svg';
 
 /**
  * Helper to determine accurate MIME type for cross-app file opening and sharing
@@ -269,10 +270,10 @@ export const FileDetailScreen = ({ route, navigation }) => {
           activeOpacity={0.7}
           accessibilityLabel="Go Back"
         >
-          <Text style={styles.backIconText}>‹</Text>
+          <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Detail</Text>
+        <Text style={styles.headerTitle}>File Detail</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -280,15 +281,13 @@ export const FileDetailScreen = ({ route, navigation }) => {
         {/* Main Card */}
         <View style={styles.detailCard}>
           {/* Top Square Thumbnail Preview */}
-          <View style={styles.thumbnailContainer}>
+          <View style={styles.previewBox}>
             {isImageFile ? (
-              <Image source={{ uri: fileUri }} style={styles.thumbnailImage} resizeMode="cover" />
+              <Image source={{ uri: fileUri }} style={styles.previewImage} resizeMode="cover" />
             ) : isVideoFile && file.path ? (
-              <VideoThumbnail filePath={file.path} style={styles.thumbnailImage} resizeMode="cover" />
+              <VideoThumbnail filePath={file.path} style={styles.previewImage} resizeMode="cover" />
             ) : (
-              <View style={styles.fallbackIconWrapper}>
-                <Text style={styles.fallbackIcon}>📁</Text>
-              </View>
+              <Text style={styles.fallbackText}>File</Text>
             )}
           </View>
 
@@ -296,13 +295,8 @@ export const FileDetailScreen = ({ route, navigation }) => {
           <Text style={styles.fileSizeText}>{formatBytes(file.size)}</Text>
 
           {/* File Path */}
-          <Text style={styles.filePathText} numberOfLines={2} ellipsisMode="middle">
+          <Text style={styles.filePathText} numberOfLines={3} ellipsisMode="tail">
             {file.path || '/storage/emulated/0/'}
-          </Text>
-
-          {/* File Name */}
-          <Text style={styles.fileNameText} numberOfLines={1} ellipsisMode="middle">
-            {file.name || 'Unknown_File'}
           </Text>
 
           {/* Copy File Location Pill Button */}
@@ -311,7 +305,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
             onPress={handleCopyLocation}
             activeOpacity={0.7}
           >
-            <Text style={styles.copyIcon}>📋</Text>
+            <Text style={styles.copyIcon}>📄</Text>
             <Text style={styles.copyButtonText}>
               {copiedToast ? 'Location Copied!' : 'Copy File Location'}
             </Text>
@@ -322,7 +316,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
             {/* Open File */}
             <TouchableOpacity style={styles.actionItem} onPress={handleOpenFile} activeOpacity={0.8}>
               <View style={styles.actionCircleBtn}>
-                <Text style={styles.actionCircleIcon}>📂</Text>
+                <View style={styles.whitePlaceholderIcon} />
               </View>
               <Text style={styles.actionItemLabel}>Open File</Text>
             </TouchableOpacity>
@@ -330,7 +324,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
             {/* Share */}
             <TouchableOpacity style={styles.actionItem} onPress={handleShareFile} activeOpacity={0.8}>
               <View style={styles.actionCircleBtn}>
-                <Text style={styles.actionCircleIcon}>📤</Text>
+                <View style={styles.whitePlaceholderIcon} />
               </View>
               <Text style={styles.actionItemLabel}>Share</Text>
             </TouchableOpacity>
@@ -342,25 +336,11 @@ export const FileDetailScreen = ({ route, navigation }) => {
               disabled={isDeleting}
               activeOpacity={0.8}
             >
-              <View style={[styles.actionCircleBtn, styles.deleteCircleBtn]}>
-                <Text style={styles.actionCircleIcon}>🗑️</Text>
+              <View style={styles.actionCircleBtn}>
+                <View style={styles.whitePlaceholderIcon} />
               </View>
               <Text style={styles.actionItemLabel}>Delete</Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Large Full Preview Box */}
-          <View style={styles.largePreviewBox}>
-            {isImageFile ? (
-              <Image source={{ uri: fileUri }} style={styles.largePreviewImage} resizeMode="contain" />
-            ) : isVideoFile && file.path ? (
-              <VideoThumbnail filePath={file.path} style={styles.largePreviewImage} resizeMode="contain" />
-            ) : (
-              <View style={styles.largeFallbackContent}>
-                <Text style={styles.largeFallbackIcon}>📄</Text>
-                <Text style={styles.largeFallbackText}>{file.name}</Text>
-              </View>
-            )}
           </View>
         </View>
       </ScrollView>
@@ -371,176 +351,133 @@ export const FileDetailScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: '#121212',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    paddingVertical: 16,
+    backgroundColor: '#121212',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#D1D5DB',
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
+    alignItems: 'flex-start',
   },
   backIconText: {
-    fontSize: 26,
-    color: '#334155',
+    fontSize: 24,
+    color: '#FFFFFF',
     fontWeight: '300',
-    lineHeight: 28,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: '500',
+    color: '#D1D5DB',
   },
   container: {
     padding: 16,
   },
   detailCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: '#1A1A1E',
+    borderRadius: 8,
+    padding: 24,
     alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#333333',
+    shadowColor: '#ffffff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 12,
   },
-  thumbnailContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#000000',
+  previewBox: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
+    backgroundColor: '#DCDCDC',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 24,
+    overflow: 'hidden',
   },
-  thumbnailImage: {
+  previewImage: {
     width: '100%',
     height: '100%',
   },
-  fallbackIconWrapper: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fallbackIcon: {
-    fontSize: 32,
+  fallbackText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#000000',
   },
   fileSizeText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   filePathText: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#9CA3AF',
     textAlign: 'center',
-    paddingHorizontal: 12,
-    marginBottom: 4,
-  },
-  fileNameText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    textAlign: 'center',
-    marginBottom: 16,
+    lineHeight: 18,
+    marginBottom: 24,
+    paddingHorizontal: 10,
   },
   copyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    marginBottom: 24,
+    borderColor: '#333333',
+    marginBottom: 32,
+    width: '80%',
+    justifyContent: 'center',
   },
   copyIcon: {
     fontSize: 14,
     marginRight: 8,
+    color: '#FFFFFF',
   },
   copyButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    color: '#D1D5DB',
   },
   actionButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 10,
   },
   actionItem: {
     alignItems: 'center',
   },
   actionCircleBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#38BDF8',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: '#4B5563',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-    shadowColor: '#38BDF8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  deleteCircleBtn: {
-    backgroundColor: '#38BDF8',
-  },
-  actionCircleIcon: {
-    fontSize: 22,
-    color: '#FFFFFF',
+    marginBottom: 10,
   },
   actionItemLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  largePreviewBox: {
-    width: '100%',
-    height: 240,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#38BDF8',
-    backgroundColor: '#F8FAFC',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  largePreviewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  largeFallbackContent: {
-    alignItems: 'center',
-  },
-  largeFallbackIcon: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  largeFallbackText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '600',
+  whitePlaceholderIcon: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
+    opacity: 0.9,
   },
 });

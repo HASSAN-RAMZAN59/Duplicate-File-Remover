@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   Image,
   StatusBar,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { ROUTES } from '../navigation/routes';
 import { scanCategoryFiles } from '../engine/fileScanner';
 import { scanAudioFiles } from '../engine/audioScanner';
@@ -38,6 +37,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAutoSelected, setIsAutoSelected] = useState(true);
 
+  const hasScannedRef = useRef(false);
   const isContacts = categoryType.toUpperCase() === 'CONTACTS';
 
   // 1. Perform Real-Time Scanning Engine
@@ -82,12 +82,13 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     }
   }, [categoryType]);
 
-  // Run scan whenever screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
+  // Run scan once on mount (prevents re-scanning when returning from FileDetailScreen)
+  useEffect(() => {
+    if (!hasScannedRef.current) {
+      hasScannedRef.current = true;
       performScan();
-    }, [performScan])
-  );
+    }
+  }, [performScan]);
 
   // Handle single file deletion sync when returning from FileDetailScreen
   useEffect(() => {
@@ -518,7 +519,7 @@ const styles = StyleSheet.create({
   },
   topTitleBarDivider: {
     height: 1,
-    backgroundColor: '#2A2A2E',
+    backgroundColor: '#ffffff',
   },
   reviewHeaderSection: {
     flexDirection: 'row',
@@ -611,13 +612,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   groupHeaderIcon: {
-    fontSize: 15,
+    fontSize: 12,
     color: '#FFFFFF',
     marginRight: 8,
   },
   groupHeaderTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
     color: '#FFFFFF',
     marginRight: 10,
   },

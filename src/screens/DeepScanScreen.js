@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Image,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { ROUTES } from '../navigation/routes';
@@ -19,6 +20,8 @@ import ImagesCategorySvg from '../assets/full scan/Overlay.svg';
 import VideosCategorySvg from '../assets/full scan/video.svg';
 import AudioCategorySvg from '../assets/full scan/audio.svg';
 import DocumentsCategorySvg from '../assets/full scan/document.svg';
+import ContactsCategoryImage from '../assets/full scan/Vector.png';
+import OthersCategorySvg from '../assets/full scan/zip.svg';
 
 /**
  * Circular Progress Meter matching design screenshot
@@ -79,6 +82,12 @@ const getCategoryIcon = (name) => {
   }
   if (norm.includes('doc')) {
     return <DocumentsCategorySvg width={44} height={44} />;
+  }
+  if (norm.includes('contact')) {
+    return <Image source={ContactsCategoryImage} style={{ width: 44, height: 44 }} resizeMode="contain" />;
+  }
+  if (norm.includes('other')) {
+    return <OthersCategorySvg width={44} height={44} />;
   }
   return null;
 };
