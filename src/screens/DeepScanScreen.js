@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   StatusBar,
   Image,
+  Animated,
+  Easing,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { ROUTES } from '../navigation/routes';
@@ -23,38 +25,72 @@ import DocumentsCategorySvg from '../assets/full scan/document.svg';
 import ContactsCategoryImage from '../assets/full scan/Vector.png';
 import OthersCategorySvg from '../assets/full scan/zip.svg';
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 /**
  * Circular Progress Meter matching design screenshot
  */
-const CircularProgressMeter = ({ size = 160, strokeWidth = 14, valueString = '0 B' }) => {
+const CircularProgressMeter = ({ valueString = '0 B' }) => {
   const parts = valueString.split(' ');
   const valText = parts[0] || '0';
   const unitText = parts[1] || 'B';
 
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  // Arc filled ~75% of circumference
-  const strokeDashoffset = circumference * 0.25;
+  const anim = useRef(new Animated.Value(0)).current;
+  const circumference = 2 * Math.PI * 45;
+
+  useEffect(() => {
+    anim.setValue(0);
+    Animated.timing(anim, {
+      toValue: 0.75,
+      duration: 1500,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, []);
+
+  const strokeDashoffset = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [circumference, 0],
+  });
 
   return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-        {/* Background Dark Circle Track */}
+    <View style={{
+      width: 140,
+      height: 140,
+      borderRadius: 70,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#FFFFFF',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.35,
+      shadowRadius: 15,
+      elevation: 10,
+    }}>
+      <Svg width={140} height={140} viewBox="0 0 100 100" style={{ transform: [{ rotate: '-90deg' }] }}>
+        {/* Full 360 Degree Glow Aura Layer */}
         <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#26262B"
-          strokeWidth={strokeWidth}
+          cx="50"
+          cy="50"
+          r="45"
+          stroke="#FFFFFF"
+          strokeWidth="10"
+          opacity={0.15}
           fill="none"
         />
-        {/* Active Bright White Progress Arc */}
         <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
+          cx="50"
+          cy="50"
+          r="45"
+          stroke="#26262B"
+          strokeWidth="6"
+          fill="none"
+        />
+        <AnimatedCircle
+          cx="50"
+          cy="50"
+          r="45"
           stroke="#FFFFFF"
-          strokeWidth={strokeWidth}
+          strokeWidth="3"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
@@ -62,8 +98,8 @@ const CircularProgressMeter = ({ size = 160, strokeWidth = 14, valueString = '0 
         />
       </Svg>
       <View style={{ position: 'absolute', alignItems: 'center' }}>
-        <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#FFFFFF' }}>{valText}</Text>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: '#9CA3AF', marginTop: 2 }}>{unitText}</Text>
+        <Text style={{ fontSize: 22, fontWeight: 'normal', color: '#FFFFFF' }}>{valText}</Text>
+        <Text style={{ fontSize: 12, fontWeight: 'normal', color: '#D1D5DB', marginTop: 2, letterSpacing: 1 }}>{unitText}</Text>
       </View>
     </View>
   );
@@ -336,13 +372,13 @@ const styles = StyleSheet.create({
   topSection: {
     alignItems: 'center',
     marginTop: 10,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   scanCompleteTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginTop: 20,
+    marginTop: 10,
     textAlign: 'center',
   },
   scanCompleteSubtitle: {
@@ -353,11 +389,11 @@ const styles = StyleSheet.create({
   },
   cleanAllButton: {
     backgroundColor: '#FFFFFF',
-    height: 52,
+    height: 48,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 16,
   },
   disabledButton: {
     opacity: 0.7,
@@ -371,7 +407,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   categoryCard: {
     backgroundColor: '#1E1E22',
@@ -379,8 +415,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2A2A2E',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
   },

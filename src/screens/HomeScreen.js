@@ -123,6 +123,8 @@ export const HomeScreen = ({ navigation }) => {
         {/* Storage Circle */}
         <View style={styles.progressContainer}>
           <Svg width={140} height={140} viewBox="0 0 100 100">
+            {/* Full 360 Degree Glow Aura Layer */}
+            <Circle cx="50" cy="50" r="45" stroke="#FFFFFF" strokeWidth="10" opacity={0.15} fill="transparent" />
             <Circle cx="50" cy="50" r="45" stroke="#2A2A2E" strokeWidth="6" fill="transparent" />
             <AnimatedCircle 
               cx="50" 
@@ -211,7 +213,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2E',
+    borderBottomColor: '#D1D5DB',
   },
   headerSpacer: {
     width: 36,
@@ -236,9 +238,15 @@ const styles = StyleSheet.create({
   progressContainer: {
     width: 140,
     height: 140,
+    borderRadius: 70,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 15,
+    elevation: 10,
   },
   progressTextContainer: {
     position: 'absolute',
@@ -246,8 +254,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressPercentage: {
-    fontSize: 34,
-    fontWeight: 'bold',
+    fontSize: 28,
+    
     color: '#FFFFFF',
   },
   progressLabel: {
@@ -276,7 +284,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16161A',
+    backgroundColor: '#121212',
     borderWidth: 1,
     borderColor: '#333333',
     borderRadius: 24,
