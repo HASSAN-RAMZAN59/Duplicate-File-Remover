@@ -14,6 +14,8 @@ import Board2Svg from '../assets/board2.svg';
 import Board3Svg from '../assets/board3.svg';
 import ForwardSvg from '../assets/forward.svg';
 import { permissionService } from '../services/permissionService';
+import { storageService } from '../services/storageService';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { ROUTES } from '../navigation/routes';
 
 const { width } = Dimensions.get('window');
@@ -57,6 +59,8 @@ export const OnboardingScreen = ({ navigation }) => {
   }).current;
 
   const finishOnboarding = async () => {
+    await storageService.setItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING, true);
+
     const permissionsResult = await permissionService.checkAllPermissions();
 
     let targetRoute = ROUTES.HOME;

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar, Easing } from 'react-native';
 import { ROUTES } from '../navigation/routes';
-
-
+import { storageService } from '../services/storageService';
+import { permissionService } from '../services/permissionService';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export const SplashScreen = ({ navigation }) => {
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -11,6 +12,10 @@ export const SplashScreen = ({ navigation }) => {
     let isMounted = true;
 
     const initializeApp = async () => {
+      // 1. Check if onboarding was completed previously
+      const hasCompleted = await storageService.getItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING);
+      const permResult = await permissionService.checkAllPermissions();
+
       // 2. Animate bottom progress bar from 0% to 100% over 2.5s
       Animated.timing(progressAnim, {
         toValue: 1,
@@ -20,10 +25,25 @@ export const SplashScreen = ({ navigation }) => {
       }).start(() => {
         if (!isMounted) return;
 
-        navigation.reset({
-          index: 0,
-          routes: [{ name: ROUTES.LANGUAGE }],
-        });
+        const isCompleted = hasCompleted === true || hasCompleted === 'true';
+
+        if (isCompleted) {
+          // Skip onboarding on subsequent app launches
+          let targetRoute = ROUTES.HOME;
+          if (!permResult.areAllGranted) {
+            targetRoute = ROUTES.PERMISSIONS;
+          }
+          navigation.reset({
+            index: 0,
+            routes: [{ name: targetRoute }],
+          });
+        } else {
+          // First time launch: go to Language -> Permissions -> Onboarding
+          navigation.reset({
+            index: 0,
+            routes: [{ name: ROUTES.LANGUAGE }],
+          });
+        }
       });
     };
 

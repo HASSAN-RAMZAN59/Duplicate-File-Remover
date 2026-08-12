@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,20 @@ import {
   StatusBar,
   Modal,
   TouchableWithoutFeedback,
-  ToastAndroid,
   Platform,
   Linking,
+  Animated,
 } from 'react-native';
 import { ROUTES } from '../navigation/routes';
 import { loadSettings, updateSetting, DEFAULT_SETTINGS } from '../services/settingsService';
+import BackArrowSvg from '../assets/back arrow.svg';
+import LanguageSvg from '../assets/language.svg';
+import IgnoreSvg from '../assets/ignore.svg';
+import AutomaticSvg from '../assets/automatic.svg';
+import RateUsSvg from '../assets/rate us.svg';
+import PrivacySvg from '../assets/privacy .svg';
+import VersionSvg from '../assets/version.svg';
+import ExternalLinkSvg from '../assets/version 2.svg';
 
 const AUTO_SCAN_OPTIONS = ['Off', 'Daily', 'Weekly', 'Monthly'];
 
@@ -23,6 +31,30 @@ export const SettingsScreen = ({ navigation }) => {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAutoScanModalVisible, setIsAutoScanModalVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
+  const showThemedToast = (msg) => {
+    setToastMessage(msg);
+    setShowToast(true);
+    toastAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(toastAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1800),
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowToast(false);
+    });
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -48,9 +80,7 @@ export const SettingsScreen = ({ navigation }) => {
   const handleToggle = async (key, value) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     await updateSetting(key, value);
-    if (Platform.OS === 'android' && ToastAndroid) {
-      ToastAndroid.show(`Setting updated`, ToastAndroid.SHORT);
-    }
+    showThemedToast('Setting updated successfully');
   };
 
   const handleSelectAutoScan = async (option) => {
@@ -59,9 +89,7 @@ export const SettingsScreen = ({ navigation }) => {
   };
 
   const handleRateUs = () => {
-    if (Platform.OS === 'android' && ToastAndroid) {
-      ToastAndroid.show('Thank you for supporting us!', ToastAndroid.SHORT);
-    }
+    showThemedToast('Thank you for supporting us!');
   };
 
   return (
@@ -76,7 +104,7 @@ export const SettingsScreen = ({ navigation }) => {
           activeOpacity={0.7}
           accessibilityLabel="Go Back"
         >
-          <Text style={styles.backArrow}>←</Text>
+          <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Setting</Text>
         <View style={{ width: 40 }} />
@@ -92,7 +120,9 @@ export const SettingsScreen = ({ navigation }) => {
             activeOpacity={0.7}
             onPress={() => navigation.navigate(ROUTES.LANGUAGE)}
           >
-            <View style={styles.placeholderBox} />
+            <View style={styles.iconContainer}>
+              <LanguageSvg width={20} height={20} />
+            </View>
             <View style={styles.labelContainer}>
               <Text style={styles.rowTitle}>Language</Text>
             </View>
@@ -108,7 +138,9 @@ export const SettingsScreen = ({ navigation }) => {
         <View style={styles.cardContainer}>
           {/* Ignore Small Files */}
           <View style={styles.row}>
-            <View style={styles.placeholderBox} />
+            <View style={styles.iconContainer}>
+              <IgnoreSvg width={20} height={20} />
+            </View>
             <View style={styles.labelContainer}>
               <Text style={styles.rowTitle}>Ignore Small Files</Text>
               <Text style={styles.rowSubtitle}>Exclude files under 1MB</Text>
@@ -130,7 +162,9 @@ export const SettingsScreen = ({ navigation }) => {
             activeOpacity={0.7}
             onPress={() => setIsAutoScanModalVisible(true)}
           >
-            <View style={styles.placeholderBox} />
+            <View style={styles.iconContainer}>
+              <AutomaticSvg width={20} height={20} />
+            </View>
             <View style={styles.labelContainer}>
               <Text style={styles.rowTitle}>Automatic Scanning</Text>
             </View>
@@ -146,11 +180,13 @@ export const SettingsScreen = ({ navigation }) => {
         <View style={styles.cardContainer}>
           {/* Rate Us */}
           <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={handleRateUs}>
-            <View style={styles.placeholderBox} />
+            <View style={styles.iconContainer}>
+              <RateUsSvg width={20} height={20} />
+            </View>
             <View style={styles.labelContainer}>
               <Text style={styles.rowTitle}>Rate Us</Text>
             </View>
-            <Text style={styles.externalIcon}>↗</Text>
+            <ExternalLinkSvg width={14} height={14} />
           </TouchableOpacity>
 
           <View style={styles.divider} />
@@ -161,7 +197,9 @@ export const SettingsScreen = ({ navigation }) => {
             activeOpacity={0.7}
             onPress={() => navigation.navigate(ROUTES.PRIVACY_POLICY)}
           >
-            <View style={styles.placeholderBox} />
+            <View style={styles.iconContainer}>
+              <PrivacySvg width={20} height={20} />
+            </View>
             <View style={styles.labelContainer}>
               <Text style={styles.rowTitle}>Privacy Policy</Text>
             </View>
@@ -172,7 +210,9 @@ export const SettingsScreen = ({ navigation }) => {
 
           {/* Version */}
           <View style={styles.row}>
-            <View style={styles.placeholderBox} />
+            <View style={styles.iconContainer}>
+              <VersionSvg width={20} height={20} />
+            </View>
             <View style={styles.labelContainer}>
               <Text style={styles.rowTitle}>Version</Text>
             </View>
@@ -216,6 +256,31 @@ export const SettingsScreen = ({ navigation }) => {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Dark Theme Animated Toast Notification */}
+      {showToast && (
+        <Animated.View
+          style={[
+            styles.toastContainer,
+            {
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [40, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.toastIconWrapper}>
+            <Text style={styles.toastCheckmark}>✓</Text>
+          </View>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 };
@@ -274,6 +339,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
   },
   placeholderBox: {
     width: 36,
@@ -376,5 +450,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#E5E2E1',
     fontWeight: 'bold',
+  },
+  /* Toast Notification Styles */
+  toastContainer: {
+    position: 'absolute',
+    bottom: 36,
+    alignSelf: 'center',
+    backgroundColor: '#1E1E22',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#ffffff',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 999,
+  },
+  toastIconWrapper: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#2e2e2e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  toastCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

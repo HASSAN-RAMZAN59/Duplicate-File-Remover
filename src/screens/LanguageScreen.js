@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { storageService } from '../services/storageService';
 import { permissionService } from '../services/permissionService';
+import { updateSetting } from '../services/settingsService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { ROUTES } from '../navigation/routes';
 
@@ -56,9 +57,15 @@ export const LanguageScreen = ({ navigation }) => {
   }, []);
 
   const handleNext = async () => {
-    // 1. Save selected language
+    // 1. Save selected language in storage & settingsService
     await storageService.setItem(STORAGE_KEYS.SELECTED_LANGUAGE, selectedLanguage);
 
+    const langObj = LANGUAGES.find((l) => l.id === selectedLanguage);
+    if (langObj) {
+      await updateSetting('language', langObj.name);
+    }
+
+    // 2. Navigate to Onboarding (all 3 screens play)
     navigation.reset({
       index: 0,
       routes: [{ name: ROUTES.ONBOARDING }],
