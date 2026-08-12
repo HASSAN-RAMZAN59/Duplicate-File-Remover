@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  StatusBar,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
 import { scanCategoryFiles } from '../engine/fileScanner';
 import { scanAudioFiles } from '../engine/audioScanner';
@@ -25,6 +25,10 @@ import { calculateImageDuplicates } from '../engine/imageHashEngine';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
 import { deleteBatch } from '../engine/fileDeleter';
 import { VideoThumbnail } from '../components/VideoThumbnail';
+import BackArrowSvg from '../assets/back arrow.svg';
+import DelIconSvg from '../assets/del.svg';
+import GroupHeaderSvg from '../assets/scan resultgroup.svg';
+import PinIconSvg from '../assets/pin.svg';
 
 export const DuplicateViewerScreen = ({ route, navigation }) => {
   const { categoryType = 'Images' } = route.params || {};
@@ -32,6 +36,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [duplicateGroups, setDuplicateGroups] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAutoSelected, setIsAutoSelected] = useState(true);
 
   const isContacts = categoryType.toUpperCase() === 'CONTACTS';
 
@@ -44,45 +49,31 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
       if (categoryType.toUpperCase() === 'CONTACTS') {
         groups = await scanContactDuplicates();
-        console.log(`[DuplicateViewer] Contacts Scan Result:`, { duplicateGroupsCount: groups.length });
       } else if (categoryType.toUpperCase() === 'AUDIO') {
         rawFiles = await scanAudioFiles();
         groups = calculateAudioDuplicates(rawFiles);
-        console.log(`[DuplicateViewer] Audio Scan Result:`, {
-          rawCount: rawFiles.length,
-          duplicateGroupsCount: groups.length,
-        });
       } else if (categoryType.toUpperCase() === 'DOCUMENTS') {
         rawFiles = await scanDocumentFiles();
         groups = calculateDocumentDuplicates(rawFiles);
-        console.log(`[DuplicateViewer] Documents Scan Result:`, {
-          rawCount: rawFiles.length,
-          duplicateGroupsCount: groups.length,
-        });
       } else if (categoryType.toUpperCase() === 'IMAGES') {
         rawFiles = await scanImageFiles();
         groups = await calculateImageDuplicates(rawFiles);
-        console.log(`[DuplicateViewer] Ultra-Strict Images Scan Result:`, {
-          rawCount: rawFiles.length,
-          duplicateGroupsCount: groups.length,
-        });
       } else {
         rawFiles = await scanCategoryFiles(categoryType);
         groups = calculateDuplicates(rawFiles);
-
-        console.log(`[DuplicateViewer] Real-Time Scan Result for ${categoryType}:`, {
-          rawCount: rawFiles.length,
-          duplicateGroupsCount: groups.length,
-        });
       }
 
-      if (rawFiles.length > 0 && groups.length === 0) {
-        console.log(
-          `[DuplicateViewer] Raw files were fetched (${rawFiles.length}), 0 duplicate groups matched.`
-        );
-      }
+      // Ensure all duplicates are pre-selected by default on scan load
+      const autoSelectedGroups = groups.map((group) => ({
+        ...group,
+        files: group.files.map((file) => ({
+          ...file,
+          selected: !file.isOriginal,
+        })),
+      }));
 
-      setDuplicateGroups(groups);
+      setDuplicateGroups(autoSelectedGroups);
+      setIsAutoSelected(true);
     } catch (error) {
       console.error('[DuplicateViewer] Scanning error:', error);
       setDuplicateGroups([]);
@@ -94,11 +85,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   // Run scan whenever screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      let isMounted = true;
       performScan();
-      return () => {
-        isMounted = false;
-      };
     }, [performScan])
   );
 
@@ -166,25 +153,23 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     );
   };
 
-  const toggleSelectAllGroup = (groupId) => {
-    setDuplicateGroups((prevGroups) =>
-      prevGroups.map((group) => {
-        if (group.groupId !== groupId) return group;
-        const duplicateFiles = group.files.filter((f) => !f.isOriginal);
-        const areAllDuplicatesSelected = duplicateFiles.every((f) => f.selected);
+  // Auto Select Handler: Toggles selection of all duplicates vs unselect all
+  const handleAutoSelect = () => {
+    const nextState = !isAutoSelected;
+    setIsAutoSelected(nextState);
 
-        return {
-          ...group,
-          files: group.files.map((file) => {
-            if (file.isOriginal) return file;
-            return { ...file, selected: !areAllDuplicatesSelected };
-          }),
-        };
-      })
+    setDuplicateGroups((prevGroups) =>
+      prevGroups.map((group) => ({
+        ...group,
+        files: group.files.map((file) => ({
+          ...file,
+          selected: nextState ? !file.isOriginal : false,
+        })),
+      }))
     );
   };
 
-  // 4. Primary Action Handler (Merge Contacts for Contacts tab, Delete Selected for Files)
+  // 4. Primary Action Handler (Merge Contacts / Delete Selected Files)
   const handlePrimaryAction = () => {
     if (selectionSummary.selectedCount === 0) {
       Alert.alert(
@@ -197,15 +182,13 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     }
 
     if (isContacts) {
-      // Contact Merging Action Switch
       Alert.alert(
         'Confirm Contact Merge',
-        'Selected duplicate contacts will be merged into 1 unified contact card with all details preserved.',
+        'Selected duplicate contacts will be merged into 1 unified contact card.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Merge Contacts',
-            style: 'default',
             onPress: async () => {
               setIsDeleting(true);
               try {
@@ -214,7 +197,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
                 if (res.success || res.totalMerged > 0) {
                   Alert.alert('Contacts Merged 🎉', 'Contacts merged successfully');
-                  performScan(); // Refresh active contacts list
+                  performScan();
                 } else {
                   Alert.alert('Merge Error', 'Could not merge selected contacts.');
                 }
@@ -227,10 +210,9 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
         ]
       );
     } else {
-      // Regular File Deletion Action
       Alert.alert(
         'Confirm Deletion',
-        `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})? This action will remove them from your device.`,
+        `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -290,70 +272,57 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     }
   };
 
-  // 5. Render Group Card
-  const renderGroupCard = ({ item: group }) => {
-    const duplicateFiles = group.files.filter((f) => !f.isOriginal);
-    const isGroupFullySelected = duplicateFiles.every((f) => f.selected);
+  // 5. Render Group Card (Pic 1 & Pic 2 Layout)
+  const renderGroupCard = ({ item: group, index: groupIndex }) => {
+    let totalGroupBytes = 0;
+    group.files.forEach((f) => {
+      totalGroupBytes += Number(f.size || 0);
+    });
+    const formattedGroupSize = formatBytes(totalGroupBytes);
 
     return (
-      <View style={styles.groupCard}>
-        {/* Group Header */}
-        <View style={styles.groupHeader}>
-          <View style={styles.groupInfo}>
-            <Text style={styles.groupTitle}>
-              Group ({group.fileCount} items) • {group.individualSizeFormatted} each
-            </Text>
-            <Text style={styles.groupSubtitle}>
-              Match: {group.matchType} • Reclaim: {group.reclaimableFormatted}
-            </Text>
+      <View style={styles.groupContainer} key={group.groupId || `group_${groupIndex}`}>
+        {/* Group Header matching Pic 1 & Pic 2 */}
+        <View style={styles.groupHeaderRow}>
+          <View style={styles.groupHeaderLeft}>
+            <GroupHeaderSvg width={17} height={17} style={{ marginRight: 8 }} />
+
+            <Text style={styles.groupHeaderTitle}>Group {groupIndex + 1}</Text>
+            <View style={styles.groupPillBadge}>
+              <Text style={styles.groupPillText}>
+                {group.fileCount || group.files.length} files • {formattedGroupSize}
+              </Text>
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.selectAllButton}
-            onPress={() => toggleSelectAllGroup(group.groupId)}
-          >
-            <Text style={styles.selectAllText}>
-              {isGroupFullySelected ? 'Deselect Group' : 'Select Group'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
-        {/* File / Contact Item List inside Group */}
+        <View style={styles.groupHeaderDivider} />
+
+        {/* File Cards inside Group */}
         {group.files.map((file, idx) => {
           const ext = (file.extension || '').toLowerCase();
           const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp', '.svg'].includes(ext);
           const isVideo =
             (file.category && file.category.toUpperCase() === 'VIDEOS') ||
             ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.3gp', '.webm', '.m4v', '.ts', '.m2ts', '.mpg', '.mpeg', '.3g2', '.vob', '.divx'].includes(ext);
+          const isAudio =
+            (file.category && file.category.toUpperCase() === 'AUDIO') ||
+            ['.mp3', '.wav', '.m4a', '.aac', '.opus', '.ogg', '.flac'].includes(ext);
+
+          const isSelected = file.selected;
+          const isOriginal = file.isOriginal;
 
           return (
             <TouchableOpacity
               key={file.id || file.path || `file_${idx}`}
               style={[
-                styles.fileItem,
-                file.isOriginal && styles.originalFileItem,
-                file.selected && styles.selectedFileItem,
+                styles.fileCard,
+                isSelected && styles.fileCardSelected,
               ]}
               onPress={() => !isContacts && navigation.navigate(ROUTES.FILE_DETAIL, { file })}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              {/* Checkbox / Badge */}
-              <TouchableOpacity
-                style={styles.checkboxContainer}
-                onPress={() => toggleFileSelection(group.groupId, file.id)}
-                disabled={file.isOriginal}
-              >
-                {file.isOriginal ? (
-                  <View style={styles.originalBadge}>
-                    <Text style={styles.originalBadgeText}>Original</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.checkbox, file.selected && styles.checkboxSelected]}>
-                    {file.selected && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* 46x46 Thumbnail Preview */}
+              {/* Left Thumbnail Preview (Pic 1 & Pic 2) */}
               <View style={styles.thumbnailWrapper}>
                 {isImage && file.path ? (
                   <Image
@@ -371,27 +340,48 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                 ) : (
                   <View style={styles.thumbnailFallback}>
                     <Text style={styles.thumbnailFallbackIcon}>
-                      {isVideo
-                        ? '🎥'
-                        : file.category === 'Audio' || (ext && ['.mp3', '.wav', '.m4a', '.aac', '.opus', '.ogg', '.flac'].includes(ext))
-                        ? '🎵'
-                        : file.category === 'Contacts'
-                        ? '👤'
-                        : '📄'}
+                      {isVideo ? '🎥' : isAudio ? '🎵' : isContacts ? '👤' : '📄'}
                     </Text>
                   </View>
                 )}
               </View>
 
-              {/* File / Contact Info */}
-              <View style={styles.fileDetails}>
-                <Text style={styles.fileName} numberOfLines={1}>
-                  {file.title || file.name}
-                </Text>
-                <Text style={styles.filePath} numberOfLines={1}>
+              {/* Center Details */}
+              <View style={styles.fileInfoContainer}>
+                {/* Top Row: File Name & Size */}
+                <View style={styles.fileNameSizeRow}>
+                  <Text style={styles.fileNameText} numberOfLines={1}>
+                    {file.title || file.name}
+                  </Text>
+                  <Text style={styles.fileSizeText}>
+                    {formatBytes(file.size || 0)}
+                  </Text>
+                </View>
+
+                {/* Directory Path */}
+                <Text style={styles.filePathText} numberOfLines={1}>
                   {file.path}
                 </Text>
+
+                {/* Original Kept Tag */}
+                {isOriginal && (
+                  <View style={styles.originalKeptBadge}>
+                    <PinIconSvg width={7} height={12} style={{ marginRight: 4 }} />
+                    <Text style={styles.originalKeptText}>Original Kept</Text>
+                  </View>
+                )}
               </View>
+
+              {/* Right Checkbox */}
+              <TouchableOpacity
+                style={styles.checkboxTouchContainer}
+                onPress={() => toggleFileSelection(group.groupId, file.id)}
+                disabled={isOriginal}
+              >
+                <View style={[styles.checkboxSquare, isSelected && styles.checkboxSquareSelected]}>
+                  {isSelected && <Text style={styles.checkboxCheckmark}>✓</Text>}
+                </View>
+              </TouchableOpacity>
             </TouchableOpacity>
           );
         })}
@@ -399,24 +389,55 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     );
   };
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#121212" translucent={false} />
+        <View style={styles.fullScreenLoadingContainer}>
+          <ActivityIndicator size="large" color="#306FFF" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
+      <StatusBar barStyle="light-content" backgroundColor="#121212" translucent={false} />
+
+      {/* 1. Top Title Bar with 'Scan Details' */}
+      <View style={styles.topTitleBarContainer}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>{categoryType} Duplicates</Text>
-        <View style={{ width: 60 }} />
+        <Text style={styles.topTitleBarText}>Scan Details</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
+      <View style={styles.topTitleBarDivider} />
+
+      {/* 2. Review Duplicates Header Section */}
+      <View style={styles.reviewHeaderSection}>
+        <View style={styles.reviewHeaderLeft}>
+          <Text style={styles.reviewMainTitle}>Review Duplicates</Text>
+          <Text style={styles.reviewSubtitleLine}>
+            Select the files you want to remove. Keep at least one copy.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.autoSelectPillButton,
+            { backgroundColor: isAutoSelected ? '#306FFF' : '#464646' },
+          ]}
+          onPress={handleAutoSelect}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.autoSelectPillText}>Auto Select</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Screen Body */}
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Scanning {categoryType} for duplicates...</Text>
-        </View>
-      ) : duplicateGroups.length === 0 ? (
+      {duplicateGroups.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🎉</Text>
           <Text style={styles.emptyTitle}>No Duplicates Found</Text>
@@ -428,38 +449,41 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
         <View style={{ flex: 1 }}>
           <FlatList
             data={duplicateGroups}
-            keyExtractor={(item) => item.groupId}
+            keyExtractor={(item, idx) => item.groupId || `group_${idx}`}
             renderItem={renderGroupCard}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={styles.listContentContainer}
+            showsVerticalScrollIndicator={false}
           />
 
-          {/* Bottom Floating Action Bar */}
-          <View style={styles.bottomBar}>
-            <View style={styles.summaryContainer}>
-              <Text style={styles.summaryText}>
-                Selected: {selectionSummary.selectedCount} {isContacts ? 'contact(s)' : 'file(s)'}
+          {/* Bottom Floating Action Bar matching Pic 3 */}
+          <View style={styles.bottomBarContainer}>
+            <View style={styles.bottomSummaryInfo}>
+              <Text style={styles.bottomSelectedCountText}>
+                {selectionSummary.selectedCount} {isContacts ? 'contacts' : 'files'} selected
               </Text>
-              <Text style={styles.summarySubtext}>
-                {isContacts ? 'Action: Contact Merging' : `Reclaim: ${selectionSummary.formattedBytes}`}
+              <Text style={styles.bottomRecoverText}>
+                {isContacts ? 'Contact Merging' : `Recover ${selectionSummary.formattedBytes}`}
               </Text>
             </View>
 
             <TouchableOpacity
               style={[
-                isContacts ? styles.mergeButton : styles.deleteButton,
-                (selectionSummary.selectedCount === 0 || isDeleting) && styles.disabledDeleteButton,
+                styles.deletePillButton,
+                (selectionSummary.selectedCount === 0 || isDeleting) && styles.deletePillButtonDisabled,
               ]}
               onPress={handlePrimaryAction}
               disabled={selectionSummary.selectedCount === 0 || isDeleting}
+              activeOpacity={0.85}
             >
               {isDeleting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color="#991B1B" />
               ) : (
-                <Text style={styles.actionButtonText}>
-                  {isContacts
-                    ? `Merge Selected Contacts (${selectionSummary.selectedCount})`
-                    : `Delete Selected (${selectionSummary.selectedCount})`}
-                </Text>
+                <View style={styles.deleteButtonContentRow}>
+                  <DelIconSvg width={14} height={15} style={{ marginRight: 6 }} />
+                  <Text style={styles.deletePillButtonText}>
+                    {isContacts ? 'Merge Selected' : 'Delete Selected'}
+                  </Text>
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -472,44 +496,83 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.background || '#0A0F1D',
+    backgroundColor: '#121212',
   },
-  topBar: {
+  topTitleBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   backButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  backButtonText: {
-    color: '#3B82F6',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  topBarTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  loadingContainer: {
-    flex: 1,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  topTitleBarText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  topTitleBarDivider: {
+    height: 1,
+    backgroundColor: '#2A2A2E',
+  },
+  reviewHeaderSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 14,
+  },
+  reviewHeaderLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  reviewMainTitle: {
+    fontSize: 20,
+    
+    color: '#FFFFFF',
+  },
+  reviewSubtitleLine: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  autoSelectPillButton: {
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginLeft: 8,
+  },
+  autoSelectPillText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  fullScreenLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+  },
+  loadingContainer: {
+    flex: 1,
+    justify: 'center',
+    alignItems: 'center',
+  },
   loadingText: {
-    color: '#94A3B8',
+    color: '#9CA3AF',
     marginTop: 12,
     fontSize: 15,
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justify: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
   },
@@ -525,186 +588,199 @@ const styles = StyleSheet.create({
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
   },
-  listContent: {
-    padding: 16,
-    paddingBottom: 90,
+  listContentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 100,
   },
-  groupCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
+  groupContainer: {
+    marginBottom: 24,
   },
-  groupHeader: {
+  groupHeaderRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-    paddingBottom: 10,
-    marginBottom: 12,
-  },
-  groupInfo: {
-    flex: 1,
-  },
-  groupTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  groupSubtitle: {
-    color: '#10B981',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  selectAllButton: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  selectAllText: {
-    color: '#3B82F6',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  fileItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 10,
-    padding: 10,
     marginBottom: 8,
   },
-  originalFileItem: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#10B981',
+  groupHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  selectedFileItem: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#EF4444',
+  groupHeaderIcon: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginRight: 8,
   },
-  checkboxContainer: {
+  groupHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginRight: 10,
   },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#64748B',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: '#EF4444',
-    borderColor: '#EF4444',
-  },
-  checkmark: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  originalBadge: {
-    backgroundColor: '#065F46',
-    paddingHorizontal: 8,
+  groupPillBadge: {
+    backgroundColor: '#424754',
+    borderRadius: 14,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
   },
-  originalBadgeText: {
-    color: '#34D399',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  thumbnailWrapper: {
-    width: 46,
-    height: 46,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#334155',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    position: 'relative',
-  },
-  thumbnailImage: {
-    width: 46,
-    height: 46,
-  },
-  thumbnailFallback: {
-    width: 46,
-    height: 46,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#334155',
-  },
-  thumbnailFallbackIcon: {
-    fontSize: 22,
-  },
-  fileDetails: {
-    flex: 1,
-  },
-  fileName: {
-    color: '#FFFFFF',
-    fontSize: 14,
+  groupPillText: {
+    color: '#9CA3AF',
+    fontSize: 12,
     fontWeight: '600',
   },
-  filePath: {
-    color: '#64748B',
+  groupHeaderDivider: {
+    height: 1,
+    backgroundColor: '#2A2A2E',
+    marginBottom: 12,
+  },
+  fileCard: {
+    backgroundColor: '#161618',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#2A2A2E',
+    padding: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fileCardSelected: {
+    backgroundColor: '#2E3132',
+    borderColor: '#2E3132',
+  },
+  thumbnailWrapper: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#26262B',
+    justify: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  thumbnailImage: {
+    width: 52,
+    height: 52,
+  },
+  thumbnailFallback: {
+    width: 52,
+    height: 52,
+    justify: 'center',
+    alignItems: 'center',
+    backgroundColor: '#26262B',
+  },
+  thumbnailFallbackIcon: {
+    fontSize: 24,
+  },
+  fileInfoContainer: {
+    flex: 1,
+    marginRight: 10,
+  },
+  fileNameSizeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justify: 'space-between',
+  },
+  fileNameText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+    marginRight: 8,
+  },
+  fileSizeText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  filePathText: {
     fontSize: 11,
+    color: '#9CA3AF',
     marginTop: 2,
   },
-  bottomBar: {
+  originalKeptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  originalKeptText: {
+    fontSize: 12,
+    color: '#4EDEA3',
+    fontWeight: '600',
+  },
+  checkboxTouchContainer: {
+    padding: 4,
+  },
+  checkboxSquare: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#4B5563',
+    justify: 'center',
+    alignItems: 'center',
+  },
+  checkboxSquareSelected: {
+    backgroundColor: '#727785',
+    borderColor: '#727785',
+  },
+  checkboxCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  bottomBarContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#121212',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justify: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: '#ffffff',
   },
-  summaryContainer: {
+  bottomSummaryInfo: {
     flex: 1,
   },
-  summaryText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
+  bottomSelectedCountText: {
+    color: '#CBD5E1',
+    fontSize: 13,
   },
-  summarySubtext: {
-    color: '#10B981',
-    fontSize: 12,
+  bottomRecoverText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
     marginTop: 2,
   },
-  deleteButton: {
-    backgroundColor: '#EF4444',
+  deletePillButton: {
+    backgroundColor: '#FFE2E2',
+    borderRadius: 14,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 10,
+    marginLeft: 12,
   },
-  mergeButton: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-  },
-  disabledDeleteButton: {
-    backgroundColor: '#475569',
+  deletePillButtonDisabled: {
+    backgroundColor: '#2A2A2E',
     opacity: 0.6,
   },
-  actionButtonText: {
-    color: '#FFFFFF',
+  deleteButtonContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trashIconText: {
     fontSize: 14,
+    marginRight: 6,
+  },
+  deletePillButtonText: {
+    color: '#991B1B',
+    fontSize: 15,
     fontWeight: 'bold',
   },
 });

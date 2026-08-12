@@ -8,12 +8,80 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  StatusBar,
 } from 'react-native';
-import { COLORS } from '../constants/colors';
+import Svg, { Circle } from 'react-native-svg';
 import { ROUTES } from '../navigation/routes';
 import { runDeepScan } from '../engine/deepScanEngine';
 import { deleteBatch } from '../engine/fileDeleter';
-import { formatBytes } from '../engine/hashEngine';
+import BackArrowSvg from '../assets/back arrow.svg';
+import ImagesCategorySvg from '../assets/full scan/Overlay.svg';
+import VideosCategorySvg from '../assets/full scan/video.svg';
+import AudioCategorySvg from '../assets/full scan/audio.svg';
+import DocumentsCategorySvg from '../assets/full scan/document.svg';
+
+/**
+ * Circular Progress Meter matching design screenshot
+ */
+const CircularProgressMeter = ({ size = 160, strokeWidth = 14, valueString = '0 B' }) => {
+  const parts = valueString.split(' ');
+  const valText = parts[0] || '0';
+  const unitText = parts[1] || 'B';
+
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  // Arc filled ~75% of circumference
+  const strokeDashoffset = circumference * 0.25;
+
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        {/* Background Dark Circle Track */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#26262B"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {/* Active Bright White Progress Arc */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#FFFFFF"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </Svg>
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
+        <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#FFFFFF' }}>{valText}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: '#9CA3AF', marginTop: 2 }}>{unitText}</Text>
+      </View>
+    </View>
+  );
+};
+
+const getCategoryIcon = (name) => {
+  const norm = (name || '').toLowerCase();
+  if (norm.includes('image') || norm.includes('photo')) {
+    return <ImagesCategorySvg width={44} height={44} />;
+  }
+  if (norm.includes('video')) {
+    return <VideosCategorySvg width={44} height={44} />;
+  }
+  if (norm.includes('audio') || norm.includes('music')) {
+    return <AudioCategorySvg width={44} height={44} />;
+  }
+  if (norm.includes('doc')) {
+    return <DocumentsCategorySvg width={44} height={44} />;
+  }
+  return null;
+};
 
 export const DeepScanScreen = ({ navigation }) => {
   const [isScanning, setIsScanning] = useState(false);
@@ -48,9 +116,9 @@ export const DeepScanScreen = ({ navigation }) => {
     handleStartDeepScan();
   }, []);
 
-  // 1-Tap Clean All Selected Duplicates Handler
+  // Clean All Handler
   const handleCleanAll = () => {
-    if (!scanResults || scanResults.allPreselectedFiles.length === 0) {
+    if (!scanResults || !scanResults.allPreselectedFiles || scanResults.allPreselectedFiles.length === 0) {
       Alert.alert('No Duplicates', 'There are no duplicates selected to clean.');
       return;
     }
@@ -59,7 +127,7 @@ export const DeepScanScreen = ({ navigation }) => {
     const formattedSize = scanResults.totalReclaimableFormatted;
 
     Alert.alert(
-      '⚡ 1-Tap Clean All',
+      'Clean All Duplicates',
       `Are you sure you want to permanently delete all ${fileCount} duplicate items and free up ${formattedSize} of storage?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -90,133 +158,106 @@ export const DeepScanScreen = ({ navigation }) => {
     );
   };
 
+  const categoryList = scanResults && scanResults.categoryResults
+    ? Object.values(scanResults.categoryResults)
+    : [];
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#121212" translucent={false} />
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.navigate(ROUTES.HOME)}
           activeOpacity={0.7}
-          accessibilityLabel="Go Back to Home"
+          accessibilityLabel="Go Back"
         >
-          <Text style={styles.backIconText}>←</Text>
+          <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Deep Scan & Clean</Text>
-        <View style={{ width: 44 }} />
+        <Text style={styles.headerTitle}>DupClean</Text>
+        <View style={{ width: 32 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Status Card */}
-        <View style={styles.scanCard}>
-          <Text style={styles.scanIcon}>🔍</Text>
-          <Text style={styles.scanTitle}>Deep Storage Inspection</Text>
-          <Text style={styles.scanSubtitle}>
-            Full system scan across Photos, Videos, Audios, Documents, Contacts, and Cache.
-          </Text>
+        {isScanning ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#306FFF" style={{ marginBottom: 20 }} />
+            <Text style={styles.scanningTitle}>Scanning {currentCategory}...</Text>
+            <Text style={styles.scanningSubtitle}>{scanProgress}% Complete</Text>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${scanProgress}%` }]} />
+            </View>
+          </View>
+        ) : (
+          <>
+            {/* Top Center Circular Progress Section */}
+            <View style={styles.topSection}>
+              <CircularProgressMeter
+                size={160}
+                strokeWidth={14}
+                valueString={scanResults?.totalReclaimableFormatted || '0 B'}
+              />
 
-          {isScanning ? (
-            <View style={styles.progressContainer}>
-              <ActivityIndicator size="large" color={COLORS.primaryLight || '#3B82F6'} style={{ marginBottom: 16 }} />
-              <Text style={styles.progressText}>
-                Scanning {currentCategory}... {scanProgress}%
+              <Text style={styles.scanCompleteTitle}>Scan Complete</Text>
+              <Text style={styles.scanCompleteSubtitle}>
+                You can reclaim {scanResults?.totalReclaimableFormatted || '0 B'} of space.
               </Text>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${scanProgress}%` }]} />
-              </View>
             </View>
-          ) : scanResults ? (
-            <View style={styles.summaryContainer}>
-              <View style={styles.metricRow}>
-                <View style={styles.metricItem}>
-                  <Text style={styles.metricValue}>{scanResults.totalDuplicateCount}</Text>
-                  <Text style={styles.metricLabel}>Duplicates</Text>
-                </View>
 
-                <View style={styles.metricDivider} />
-
-                <View style={styles.metricItem}>
-                  <Text style={styles.metricValueHighlight}>
-                    {scanResults.totalReclaimableFormatted}
-                  </Text>
-                  <Text style={styles.metricLabel}>Space Reclaimable</Text>
-                </View>
-              </View>
-
-              {scanResults.totalDuplicateCount > 0 ? (
-                <TouchableOpacity
-                  style={[styles.cleanAllButton, isCleaning && styles.disabledButton]}
-                  onPress={handleCleanAll}
-                  disabled={isCleaning}
-                  activeOpacity={0.85}
-                >
-                  {isCleaning ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.cleanAllButtonText}>
-                      ⚡ 1-Tap Clean All ({scanResults.totalReclaimableFormatted})
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.cleanStatusBadge}>
-                  <Text style={styles.cleanStatusText}>✨ Storage Completely Clean!</Text>
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.rescanButton}
-                onPress={handleStartDeepScan}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.rescanButtonText}>🔄 Re-Scan System</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
+            {/* Primary Action Button: Clean All Now */}
             <TouchableOpacity
-              style={styles.startButton}
-              onPress={handleStartDeepScan}
+              style={[styles.cleanAllButton, isCleaning && styles.disabledButton]}
+              onPress={handleCleanAll}
+              disabled={isCleaning}
               activeOpacity={0.85}
             >
-              <Text style={styles.startButtonText}>⚡ Start Deep Scan Now</Text>
+              {isCleaning ? (
+                <ActivityIndicator size="small" color="#0F172A" />
+              ) : (
+                <Text style={styles.cleanAllButtonText}>Clean All Now</Text>
+              )}
             </TouchableOpacity>
-          )}
-        </View>
 
-        {/* Category Breakdown Cards */}
-        <Text style={styles.sectionHeader}>Category Scan Breakdown</Text>
+            {/* Categories Section Header */}
+            <Text style={styles.categoriesHeader}>Categories</Text>
 
-        {scanResults && scanResults.categoryResults ? (
-          Object.values(scanResults.categoryResults).map((cat) => (
-            <TouchableOpacity
-              key={cat.name}
-              style={styles.categoryCard}
-              onPress={() =>
-                navigation.navigate(ROUTES.DUPLICATE_VIEWER, {
-                  categoryType: cat.name,
-                })
-              }
-              activeOpacity={0.75}
-            >
-              <Text style={styles.catIcon}>{cat.icon}</Text>
-              <View style={styles.catDetails}>
-                <Text style={styles.catTitle}>{cat.name}</Text>
-                <Text style={styles.catSubtitle}>
-                  {cat.duplicateCount} Duplicate(s) Found
-                </Text>
+            {/* Category Cards List */}
+            {categoryList.length > 0 ? (
+              categoryList.map((cat) => (
+                <TouchableOpacity
+                  key={cat.name}
+                  style={styles.categoryCard}
+                  onPress={() =>
+                    navigation.navigate(ROUTES.DUPLICATE_VIEWER, {
+                      categoryType: cat.name,
+                    })
+                  }
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.iconWrapper}>
+                    {getCategoryIcon(cat.name) || <View style={styles.whitePlaceholderBox} />}
+                  </View>
+
+                  <View style={styles.categoryDetails}>
+                    <Text style={styles.categoryName}>{cat.name}</Text>
+                    <Text style={styles.categoryFileCount}>{cat.duplicateCount} files</Text>
+                  </View>
+
+                  <View style={styles.categoryRight}>
+                    <Text style={styles.categorySize}>{cat.reclaimableFormatted}</Text>
+                    <Text style={styles.categoryViewText}>View</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No Categories Found</Text>
               </View>
-              <View style={styles.catRight}>
-                <Text style={styles.catBytes}>{cat.reclaimableFormatted}</Text>
-                <Text style={styles.catArrow}>›</Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.loadingBreakdown}>
-            <ActivityIndicator size="small" color={COLORS.secondary || '#38BDF8'} />
-            <Text style={styles.loadingBreakdownText}>Preparing breakdown metrics...</Text>
-          </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -226,7 +267,7 @@ export const DeepScanScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.background || '#0A0F1D',
+    backgroundColor: '#121212',
   },
   header: {
     flexDirection: 'row',
@@ -234,229 +275,144 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder || '#1E293B',
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.cardBackground || '#1E293B',
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryLight ? COLORS.primaryLight + '60' : '#3B82F6',
-  },
-  backIconText: {
-    fontSize: 22,
-    color: COLORS.textPrimary || '#FFFFFF',
-    fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   content: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    paddingTop: 10,
   },
-  scanCard: {
-    backgroundColor: COLORS.cardBackground || '#1E293B',
-    borderRadius: 20,
-    padding: 24,
+  loadingContainer: {
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder || '#334155',
-    marginBottom: 24,
+    justifyContent: 'center',
+    paddingVertical: 80,
   },
-  scanIcon: {
-    fontSize: 50,
-    marginBottom: 12,
-  },
-  scanTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
+  scanningTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 8,
   },
-  scanSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary || '#94A3B8',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 24,
-  },
-  startButton: {
-    backgroundColor: COLORS.primary || '#3B82F6',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 14,
-    width: '100%',
-    alignItems: 'center',
-  },
-  startButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  progressContainer: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  progressText: {
+  scanningSubtitle: {
     fontSize: 14,
-    color: COLORS.textPrimary || '#FFFFFF',
-    fontWeight: '600',
-    marginBottom: 12,
+    color: '#9CA3AF',
+    marginBottom: 20,
   },
   progressBar: {
+    width: '80%',
     height: 8,
-    width: '100%',
-    backgroundColor: '#0F172A',
     borderRadius: 4,
+    backgroundColor: '#2A2A2E',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: COLORS.secondary || '#38BDF8',
+    backgroundColor: '#306FFF',
+    borderRadius: 4,
   },
-  summaryContainer: {
-    width: '100%',
+  topSection: {
     alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 24,
   },
-  metricRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    width: '100%',
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    paddingVertical: 16,
-    borderRadius: 14,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder || '#334155',
+  scanCompleteTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginTop: 20,
+    textAlign: 'center',
   },
-  metricItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  metricValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.textPrimary || '#FFFFFF',
-  },
-  metricValueHighlight: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.success || '#10B981',
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: COLORS.textMuted || '#64748B',
-    marginTop: 4,
-  },
-  metricDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: COLORS.cardBorder || '#334155',
+  scanCompleteSubtitle: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 6,
+    textAlign: 'center',
   },
   cleanAllButton: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    height: 52,
     borderRadius: 14,
-    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  cleanAllButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  cleanStatusBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginBottom: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  cleanStatusText: {
-    color: '#10B981',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  rescanButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  rescanButtonText: {
-    color: COLORS.secondary || '#38BDF8',
-    fontSize: 13,
-    fontWeight: '600',
+    marginBottom: 28,
   },
   disabledButton: {
-    backgroundColor: '#475569',
-    opacity: 0.6,
+    opacity: 0.7,
   },
-  sectionHeader: {
+  cleanAllButtonText: {
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  categoriesHeader: {
     fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   categoryCard: {
+    backgroundColor: '#1E1E22',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#2A2A2E',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.cardBackground || '#1E293B',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder || '#334155',
   },
-  catIcon: {
-    fontSize: 28,
+  iconWrapper: {
     marginRight: 14,
   },
-  catDetails: {
+  whitePlaceholderBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    marginRight: 14,
+  },
+  categoryDetails: {
     flex: 1,
   },
-  catTitle: {
+  categoryName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  categoryFileCount: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    marginTop: 3,
+  },
+  categoryRight: {
+    alignItems: 'flex-end',
+  },
+  categorySize: {
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary || '#FFFFFF',
-    marginBottom: 2,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  catSubtitle: {
+  categoryViewText: {
     fontSize: 12,
-    color: COLORS.textMuted || '#64748B',
+    color: '#9CA3AF',
+    marginTop: 3,
   },
-  catRight: {
-    flexDirection: 'row',
+  emptyContainer: {
+    paddingVertical: 30,
     alignItems: 'center',
   },
-  catBytes: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.success || '#10B981',
-    marginRight: 8,
-  },
-  catArrow: {
-    fontSize: 20,
-    color: COLORS.textMuted || '#64748B',
-  },
-  loadingBreakdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-  },
-  loadingBreakdownText: {
-    color: COLORS.textMuted || '#64748B',
-    fontSize: 13,
-    marginLeft: 10,
+  emptyText: {
+    color: '#9CA3AF',
+    fontSize: 14,
   },
 });
