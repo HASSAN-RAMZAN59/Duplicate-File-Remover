@@ -54,29 +54,8 @@ const CircularProgressMeter = ({ valueString = '0 B' }) => {
   });
 
   return (
-    <View style={{
-      width: 140,
-      height: 140,
-      borderRadius: 70,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: '#FFFFFF',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.35,
-      shadowRadius: 15,
-      elevation: 10,
-    }}>
+    <View style={{ width: 140, height: 140, justifyContent: 'center', alignItems: 'center' }}>
       <Svg width={140} height={140} viewBox="0 0 100 100" style={{ transform: [{ rotate: '-90deg' }] }}>
-        {/* Full 360 Degree Glow Aura Layer */}
-        <Circle
-          cx="50"
-          cy="50"
-          r="45"
-          stroke="#FFFFFF"
-          strokeWidth="10"
-          opacity={0.15}
-          fill="none"
-        />
         <Circle
           cx="50"
           cy="50"
@@ -132,12 +111,14 @@ const getCategoryIcon = (name) => {
   return null;
 };
 
-export const DeepScanScreen = ({ navigation }) => {
+export const DeepScanScreen = ({ navigation, route }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [currentCategory, setCurrentCategory] = useState('');
   const [scanResults, setScanResults] = useState(null);
   const [isCleaning, setIsCleaning] = useState(false);
+
+  const selectedCategoryIds = route?.params?.selectedCategoryIds;
 
   // Trigger Deep Scan
   const handleStartDeepScan = async () => {
@@ -149,9 +130,28 @@ export const DeepScanScreen = ({ navigation }) => {
       const results = await runDeepScan((progress, categoryName) => {
         setScanProgress(progress);
         setCurrentCategory(categoryName);
-      });
+      }, selectedCategoryIds);
 
       setScanResults(results);
+
+      // If solo option was scanned, navigate directly to result screen
+      if (selectedCategoryIds && selectedCategoryIds.length === 1) {
+        const catResults = results?.categoryResults ? Object.values(results.categoryResults) : [];
+        let categoryType = 'Images';
+
+        if (catResults.length > 0) {
+          categoryType = catResults[0].name;
+        } else {
+          const soloId = selectedCategoryIds[0];
+          if (soloId === 'photos') categoryType = 'Images';
+          else if (soloId === 'videos') categoryType = 'Videos';
+          else if (soloId === 'audio') categoryType = 'Audio';
+          else if (soloId === 'docs') categoryType = 'Documents';
+        }
+
+        navigation.replace(ROUTES.DUPLICATE_VIEWER, { categoryType });
+        return;
+      }
     } catch (error) {
       console.error('[DeepScanScreen] Scan failed:', error);
       Alert.alert('Scan Failed', 'Could not complete system deep scan.');

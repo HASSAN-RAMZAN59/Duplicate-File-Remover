@@ -26,9 +26,23 @@ const SCANNABLE_CATEGORIES = [
  * @param {Function} onProgressCallback Optional callback `(progressPercentage, currentCategoryName) => void`
  * @returns {Promise<Object>} Aggregated Deep Scan Results
  */
-export const runDeepScan = async (onProgressCallback) => {
+export const runDeepScan = async (onProgressCallback, selectedCategoryIds = null) => {
+  let categoriesToScan = SCANNABLE_CATEGORIES;
+
+  if (selectedCategoryIds && Array.isArray(selectedCategoryIds) && selectedCategoryIds.length > 0) {
+    const mappedIds = selectedCategoryIds.map(id => {
+      if (id === 'photos') return 'images';
+      if (id === 'docs') return 'documents';
+      return id;
+    });
+
+    categoriesToScan = SCANNABLE_CATEGORIES.filter(cat =>
+      mappedIds.includes(cat.id) || mappedIds.includes(cat.name.toLowerCase())
+    );
+  }
+
   let completedSteps = 0;
-  const totalSteps = SCANNABLE_CATEGORIES.length;
+  const totalSteps = categoriesToScan.length;
 
   const categoryResults = {};
   let totalDuplicateCount = 0;
@@ -36,7 +50,7 @@ export const runDeepScan = async (onProgressCallback) => {
   const allDuplicateGroups = [];
   const allPreselectedFiles = [];
 
-  for (const category of SCANNABLE_CATEGORIES) {
+  for (const category of categoriesToScan) {
     if (typeof onProgressCallback === 'function') {
       const progressPercent = Math.round((completedSteps / totalSteps) * 100);
       onProgressCallback(progressPercent, category.name);

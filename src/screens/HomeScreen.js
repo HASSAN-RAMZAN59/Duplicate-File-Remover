@@ -95,8 +95,22 @@ export const HomeScreen = ({ navigation }) => {
     }
   };
 
-  const handleDeepScan = () => {
-    navigation.navigate(ROUTES.DEEP_SCAN);
+  const [selectedCategories, setSelectedCategories] = useState(['photos']);
+
+  const toggleCategorySelection = (categoryId) => {
+    setSelectedCategories([categoryId]);
+  };
+
+  const handleFullScan = () => {
+    navigation.navigate(ROUTES.DEEP_SCAN, {
+      selectedCategoryIds: ['photos', 'videos', 'audio', 'docs', 'contacts', 'others'],
+    });
+  };
+
+  const handleScanNow = () => {
+    navigation.navigate(ROUTES.DEEP_SCAN, {
+      selectedCategoryIds: selectedCategories,
+    });
   };
 
   const circumference = 2 * Math.PI * 45; // 2 * pi * r
@@ -123,8 +137,6 @@ export const HomeScreen = ({ navigation }) => {
         {/* Storage Circle */}
         <View style={styles.progressContainer}>
           <Svg width={140} height={140} viewBox="0 0 100 100">
-            {/* Full 360 Degree Glow Aura Layer */}
-            <Circle cx="50" cy="50" r="45" stroke="#FFFFFF" strokeWidth="10" opacity={0.15} fill="transparent" />
             <Circle cx="50" cy="50" r="45" stroke="#2A2A2E" strokeWidth="6" fill="transparent" />
             <AnimatedCircle 
               cx="50" 
@@ -153,7 +165,7 @@ export const HomeScreen = ({ navigation }) => {
         </Text>
 
         {/* Full System Scan Button */}
-        <TouchableOpacity style={styles.fullSystemScanBtn} activeOpacity={0.8} onPress={handleDeepScan}>
+        <TouchableOpacity style={styles.fullSystemScanBtn} activeOpacity={0.8} onPress={handleFullScan}>
           <FullScanSvg width={18} height={18} />
           <Text style={styles.fullSystemScanText}>Full System Scan</Text>
         </TouchableOpacity>
@@ -161,32 +173,40 @@ export const HomeScreen = ({ navigation }) => {
         {/* Categories Grid */}
         <View style={styles.grid}>
           {[
-            { id: 'photos', name: 'Photos', size: categoryStats.photos, active: true, icon: <PhotosSvg width={24} height={24} /> },
-            { id: 'videos', name: 'Videos', size: categoryStats.videos, active: false, icon: <VideosSvg width={24} height={24} /> },
-            { id: 'audio', name: 'Audio', size: categoryStats.audio, active: false, icon: <AudioSvg width={24} height={24} /> },
-            { id: 'docs', name: 'Docs', size: categoryStats.docs, active: false, icon: <DocsSvg width={24} height={24} /> },
-          ].map((category) => (
-            <TouchableOpacity key={category.id} style={styles.categoryCard} activeOpacity={0.8}>
-              {/* Radio Indicator */}
-              <View style={styles.radioIndicatorContainer}>
-                <View style={[styles.radioIndicator, category.active && styles.radioIndicatorActive]}>
-                  {category.active && <View style={styles.radioInnerCircle} />}
+            { id: 'photos', name: 'Photos', size: categoryStats.photos, icon: <PhotosSvg width={24} height={24} /> },
+            { id: 'videos', name: 'Videos', size: categoryStats.videos, icon: <VideosSvg width={24} height={24} /> },
+            { id: 'audio', name: 'Audio', size: categoryStats.audio, icon: <AudioSvg width={24} height={24} /> },
+            { id: 'docs', name: 'Docs', size: categoryStats.docs, icon: <DocsSvg width={24} height={24} /> },
+          ].map((category) => {
+            const isSelected = selectedCategories.includes(category.id);
+            return (
+              <TouchableOpacity
+                key={category.id}
+                style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
+                activeOpacity={0.8}
+                onPress={() => toggleCategorySelection(category.id)}
+              >
+                {/* Radio Indicator */}
+                <View style={styles.radioIndicatorContainer}>
+                  <View style={[styles.radioIndicator, isSelected && styles.radioIndicatorActive]}>
+                    {isSelected && <View style={styles.radioInnerCircle} />}
+                  </View>
                 </View>
-              </View>
-              
-              <View style={styles.categoryContent}>
-                {category.icon}
-                <View style={styles.categoryTextContainer}>
-                  <Text style={styles.categoryName}>{category.name}</Text>
-                  <Text style={styles.categorySize}>{category.size}</Text>
+
+                <View style={styles.categoryContent}>
+                  {category.icon}
+                  <View style={styles.categoryTextContainer}>
+                    <Text style={styles.categoryName}>{category.name}</Text>
+                    <Text style={styles.categorySize}>{category.size}</Text>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Bottom Scan Now Button */}
-        <TouchableOpacity style={styles.scanNowBtn} activeOpacity={0.9} onPress={handleDeepScan}>
+        <TouchableOpacity style={styles.scanNowBtn} activeOpacity={0.9} onPress={handleScanNow}>
           <SearchSvg width={20} height={20} />
           <Text style={styles.scanNowBtnText}>Scan Now</Text>
         </TouchableOpacity>
@@ -238,15 +258,9 @@ const styles = StyleSheet.create({
   progressContainer: {
     width: 140,
     height: 140,
-    borderRadius: 70,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 15,
-    elevation: 10,
   },
   progressTextContainer: {
     position: 'absolute',
@@ -314,6 +328,9 @@ const styles = StyleSheet.create({
     borderColor: '#2A2A2E',
     padding: 12,
     marginBottom: 12,
+  },
+  categoryCardSelected: {
+    borderColor: '#3B82F6',
   },
   radioIndicatorContainer: {
     alignItems: 'flex-end',
