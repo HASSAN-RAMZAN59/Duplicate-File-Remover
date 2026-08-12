@@ -104,6 +104,55 @@ public class FileDeleterModule extends ReactContextBaseJavaModule {
     }
 
     /**
+     * Get sizes for categories natively
+     */
+    @ReactMethod
+    public void getCategorySizes(Promise promise) {
+        try {
+            ContentResolver resolver = reactContext.getContentResolver();
+            WritableMap sizes = Arguments.createMap();
+
+            sizes.putDouble("photos", getCategorySize(resolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI));
+            sizes.putDouble("videos", getCategorySize(resolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI));
+            sizes.putDouble("audio", getCategorySize(resolver, MediaStore.Audio.Media.EXTERNAL_CONTENT_URI));
+            
+            long docSize = 0;
+            try {
+                Uri filesUri = MediaStore.Files.getContentUri("external");
+                String docSelection = MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'application/%' OR " + MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'text/%'";
+                docSize = (long) getCategorySizeBySelection(resolver, filesUri, docSelection, null);
+            } catch (Exception e) {}
+            
+            sizes.putDouble("docs", (double) docSize);
+            promise.resolve(sizes);
+        } catch (Exception e) {
+            promise.reject("STORAGE_ERROR", e.getMessage());
+        }
+    }
+
+    private double getCategorySizeBySelection(ContentResolver resolver, Uri uri, String selection, String[] args) {
+        long totalSize = 0;
+        try {
+            String[] projection = new String[]{MediaStore.MediaColumns.SIZE};
+            Cursor cursor = resolver.query(uri, projection, selection, args, null);
+            if (cursor != null) {
+                int sizeIdx = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE);
+                if (sizeIdx != -1) {
+                    while (cursor.moveToNext()) {
+                        totalSize += cursor.getLong(sizeIdx);
+                    }
+                }
+                cursor.close();
+            }
+        } catch (Exception e) {}
+        return (double) totalSize;
+    }
+
+    private double getCategorySize(ContentResolver resolver, Uri uri) {
+        return getCategorySizeBySelection(resolver, uri, null, null);
+    }
+
+    /**
      * Instantly Queries Android System MediaStore for ALL Images across internal storage
      */
     @ReactMethod

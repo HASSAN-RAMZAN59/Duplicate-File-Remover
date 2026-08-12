@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
   },
   groupHeaderDivider: {
     height: 1,
-    backgroundColor: '#2A2A2E',
+    backgroundColor: '#9CA3AF',
     marginBottom: 12,
   },
   fileCard: {
