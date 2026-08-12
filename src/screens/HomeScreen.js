@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import RNFS from 'react-native-fs';
+import { useFocusEffect } from '@react-navigation/native';
 import { ROUTES } from '../navigation/routes';
 import { formatBytes } from '../engine/hashEngine';
 
@@ -56,9 +57,11 @@ export const HomeScreen = ({ navigation }) => {
     };
   }, []);
 
-  useEffect(() => {
-    fetchStorageStats();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchStorageStats();
+    }, [])
+  );
 
   const fetchStorageStats = async () => {
     try {

@@ -26,7 +26,7 @@ const SCANNABLE_CATEGORIES = [
  * @param {Function} onProgressCallback Optional callback `(progressPercentage, currentCategoryName) => void`
  * @returns {Promise<Object>} Aggregated Deep Scan Results
  */
-export const runDeepScan = async (onProgressCallback, selectedCategoryIds = null) => {
+export const runDeepScan = async (onProgressCallback, selectedCategoryIds = null, isAbortedCheck = null) => {
   let categoriesToScan = SCANNABLE_CATEGORIES;
 
   if (selectedCategoryIds && Array.isArray(selectedCategoryIds) && selectedCategoryIds.length > 0) {
@@ -51,6 +51,10 @@ export const runDeepScan = async (onProgressCallback, selectedCategoryIds = null
   const allPreselectedFiles = [];
 
   for (const category of categoriesToScan) {
+    if (typeof isAbortedCheck === 'function' && isAbortedCheck()) {
+      console.log('[deepScanEngine] Real-time scan cancelled by user.');
+      break;
+    }
     if (typeof onProgressCallback === 'function') {
       const progressPercent = Math.round((completedSteps / totalSteps) * 100);
       onProgressCallback(progressPercent, category.name);

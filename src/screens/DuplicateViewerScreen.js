@@ -28,12 +28,24 @@ import BackArrowSvg from '../assets/back arrow.svg';
 import DelIconSvg from '../assets/del.svg';
 import GroupHeaderSvg from '../assets/scan resultgroup.svg';
 import PinIconSvg from '../assets/pin.svg';
+import LottieView from 'lottie-react-native';
 
 export const DuplicateViewerScreen = ({ route, navigation }) => {
-  const { categoryType = 'Images' } = route.params || {};
+  const { categoryType = 'Images', initialGroups = null } = route.params || {};
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [duplicateGroups, setDuplicateGroups] = useState([]);
+  const [isLoading, setIsLoading] = useState(!Array.isArray(initialGroups));
+  const [duplicateGroups, setDuplicateGroups] = useState(() => {
+    if (Array.isArray(initialGroups)) {
+      return initialGroups.map((group) => ({
+        ...group,
+        files: (group.files || []).map((file) => ({
+          ...file,
+          selected: !file.isOriginal,
+        })),
+      }));
+    }
+    return [];
+  });
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAutoSelected, setIsAutoSelected] = useState(true);
 
@@ -82,13 +94,28 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     }
   }, [categoryType]);
 
-  // Run scan once on mount (prevents re-scanning when returning from FileDetailScreen)
+  // Run scan once on mount (prevents re-scanning when returning from FileDetailScreen or when pre-scanned)
   useEffect(() => {
     if (!hasScannedRef.current) {
       hasScannedRef.current = true;
-      performScan();
+
+      if (route.params?.initialGroups && Array.isArray(route.params.initialGroups)) {
+        const groups = route.params.initialGroups;
+        const autoSelectedGroups = groups.map((group) => ({
+          ...group,
+          files: (group.files || []).map((file) => ({
+            ...file,
+            selected: !file.isOriginal,
+          })),
+        }));
+        setDuplicateGroups(autoSelectedGroups);
+        setIsAutoSelected(true);
+        setIsLoading(false);
+      } else {
+        performScan();
+      }
     }
-  }, [performScan]);
+  }, [performScan, route.params]);
 
   // Handle single file deletion sync when returning from FileDetailScreen
   useEffect(() => {
@@ -394,8 +421,24 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" backgroundColor="#121212" translucent={false} />
-        <View style={styles.fullScreenLoadingContainer}>
-          <ActivityIndicator size="large" color="#306FFF" />
+        <View style={styles.topTitleBarContainer}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <BackArrowSvg width={32} height={32} />
+          </TouchableOpacity>
+          <Text style={styles.topTitleBarText}>Scanning {categoryType}</Text>
+          <View style={{ width: 32 }} />
+        </View>
+        <View style={styles.topTitleBarDivider} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <LottieView
+            source={require('../assets/scan.json')}
+            autoPlay
+            loop
+            style={{ width: 220, height: 220 }}
+          />
+          <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 16 }}>
+            Scanning {categoryType}...
+          </Text>
         </View>
       </SafeAreaView>
     );

@@ -24,6 +24,7 @@ import AudioCategorySvg from '../assets/full scan/audio.svg';
 import DocumentsCategorySvg from '../assets/full scan/document.svg';
 import ContactsCategoryImage from '../assets/full scan/Vector.png';
 import OthersCategorySvg from '../assets/full scan/zip.svg';
+import LottieView from 'lottie-react-native';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -84,6 +85,85 @@ const CircularProgressMeter = ({ valueString = '0 B' }) => {
   );
 };
 
+/**
+ * Small Real-Time Progress Meter for Loading Screen
+ */
+const SmallProgressMeter = ({ isScanning = true, progress = 0 }) => {
+  const animatedProgress = useRef(new Animated.Value(0)).current;
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    const listenerId = animatedProgress.addListener((v) => {
+      setDisplayValue(Math.round(v.value));
+    });
+    return () => {
+      animatedProgress.removeListener(listenerId);
+    };
+  }, []);
+
+  useEffect(() => {
+    animatedProgress.setValue(0);
+    const anim = Animated.timing(animatedProgress, {
+      toValue: 95,
+      duration: 3200,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    });
+    anim.start();
+
+    return () => anim.stop();
+  }, []);
+
+  useEffect(() => {
+    if (progress >= 100) {
+      Animated.timing(animatedProgress, {
+        toValue: 100,
+        duration: 200,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [progress]);
+
+  const radius = 24;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = animatedProgress.interpolate({
+    inputRange: [0, 100],
+    outputRange: [circumference, 0],
+  });
+
+  return (
+    <View style={{ width: 60, height: 60, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={60} height={60} viewBox="0 0 60 60" style={{ transform: [{ rotate: '-90deg' }] }}>
+        <Circle
+          cx="30"
+          cy="30"
+          r={radius}
+          stroke="#2A2A2E"
+          strokeWidth="3"
+          fill="none"
+        />
+        <AnimatedCircle
+          cx="30"
+          cy="30"
+          r={radius}
+          stroke="#FFFFFF"
+          strokeWidth="3"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </Svg>
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
+        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#FFFFFF' }}>
+          {displayValue}%
+        </Text>
+      </View>
+    </View>
+  );
+};
+
 const getCategoryIcon = (name) => {
   const norm = (name || '').toLowerCase();
   if (norm.includes('image') || norm.includes('photo')) {
@@ -112,13 +192,19 @@ const getCategoryIcon = (name) => {
 };
 
 export const DeepScanScreen = ({ navigation, route }) => {
-  const [isScanning, setIsScanning] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
   const [scanProgress, setScanProgress] = useState(0);
   const [currentCategory, setCurrentCategory] = useState('');
   const [scanResults, setScanResults] = useState(null);
   const [isCleaning, setIsCleaning] = useState(false);
 
   const selectedCategoryIds = route?.params?.selectedCategoryIds;
+  const isCancelledRef = useRef(false);
+
+  const handleCancelScan = () => {
+    isCancelledRef.current = true;
+    navigation.navigate(ROUTES.HOME);
+  };
 
   // Trigger Deep Scan
   const handleStartDeepScan = async () => {
@@ -126,21 +212,33 @@ export const DeepScanScreen = ({ navigation, route }) => {
     setScanProgress(0);
     setCurrentCategory('Initializing...');
 
+    let shouldKeepScanningState = false;
     try {
-      const results = await runDeepScan((progress, categoryName) => {
-        setScanProgress(progress);
-        setCurrentCategory(categoryName);
-      }, selectedCategoryIds);
+      const results = await runDeepScan(
+        (progress, categoryName) => {
+          setScanProgress(progress);
+          setCurrentCategory(categoryName);
+        },
+        selectedCategoryIds,
+        () => isCancelledRef.current
+      );
+
+      if (isCancelledRef.current) {
+        return;
+      }
 
       setScanResults(results);
 
-      // If solo option was scanned, navigate directly to result screen
+      // If single category scan, navigate directly to result screen for that category
       if (selectedCategoryIds && selectedCategoryIds.length === 1) {
+        shouldKeepScanningState = true;
         const catResults = results?.categoryResults ? Object.values(results.categoryResults) : [];
         let categoryType = 'Images';
+        let initialGroups = null;
 
         if (catResults.length > 0) {
           categoryType = catResults[0].name;
+          initialGroups = catResults[0].groups;
         } else {
           const soloId = selectedCategoryIds[0];
           if (soloId === 'photos') categoryType = 'Images';
@@ -149,20 +247,27 @@ export const DeepScanScreen = ({ navigation, route }) => {
           else if (soloId === 'docs') categoryType = 'Documents';
         }
 
-        navigation.replace(ROUTES.DUPLICATE_VIEWER, { categoryType });
+        navigation.replace(ROUTES.DUPLICATE_VIEWER, { categoryType, initialGroups });
         return;
       }
     } catch (error) {
       console.error('[DeepScanScreen] Scan failed:', error);
       Alert.alert('Scan Failed', 'Could not complete system deep scan.');
     } finally {
-      setIsScanning(false);
+      if (!shouldKeepScanningState && !isCancelledRef.current) {
+        setIsScanning(false);
+      }
     }
   };
 
-  // Auto-run Deep Scan on Screen Load
+  // Auto-run Deep Scan on Screen Load & handle cleanup on unmount
   useEffect(() => {
+    isCancelledRef.current = false;
     handleStartDeepScan();
+
+    return () => {
+      isCancelledRef.current = true;
+    };
   }, []);
 
   // Clean All Handler
@@ -219,7 +324,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.navigate(ROUTES.HOME)}
+          onPress={handleCancelScan}
           activeOpacity={0.7}
           accessibilityLabel="Go Back"
         >
@@ -233,11 +338,36 @@ export const DeepScanScreen = ({ navigation, route }) => {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isScanning ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#306FFF" style={{ marginBottom: 20 }} />
-            <Text style={styles.scanningTitle}>Scanning {currentCategory}...</Text>
-            <Text style={styles.scanningSubtitle}>{scanProgress}% Complete</Text>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${scanProgress}%` }]} />
+            {/* Top Titles */}
+            <View style={{ alignItems: 'center' }}>
+              <Text style={styles.scanHeaderTitle}>Scanning Drive...</Text>
+              <Text style={styles.scanHeaderSubtitle}>
+                Looking for duplicate files and wasted space.
+              </Text>
+            </View>
+
+            {/* Center Lottie Animation */}
+            <View style={styles.lottieContainer}>
+              <LottieView
+                source={require('../assets/scan.json')}
+                autoPlay
+                loop
+                style={{ width: 220, height: 220 }}
+              />
+            </View>
+
+            {/* Pill Cancel Scan Button */}
+            <TouchableOpacity
+              style={styles.cancelScanBtn}
+              activeOpacity={0.8}
+              onPress={handleCancelScan}
+            >
+              <Text style={styles.cancelScanText}>Cancel Scan</Text>
+            </TouchableOpacity>
+
+            {/* Bottom Real-time Small Progress Circle */}
+            <View style={styles.smallProgressMeterContainer}>
+              <SmallProgressMeter progress={scanProgress} isScanning={isScanning} />
             </View>
           </View>
         ) : (
@@ -282,6 +412,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
                   onPress={() =>
                     navigation.navigate(ROUTES.DUPLICATE_VIEWER, {
                       categoryType: cat.name,
+                      initialGroups: cat.groups,
                     })
                   }
                   activeOpacity={0.75}
@@ -343,19 +474,49 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    minHeight: 500,
   },
-  scanningTitle: {
-    fontSize: 18,
+  scanHeaderTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 8,
+    marginBottom: 6,
+    textAlign: 'center',
   },
-  scanningSubtitle: {
+  scanHeaderSubtitle: {
     fontSize: 14,
     color: '#9CA3AF',
-    marginBottom: 20,
+    textAlign: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 20,
+  },
+  lottieContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 15,
+  },
+  cancelScanBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#16161A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 15,
+  },
+  cancelScanText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  smallProgressMeterContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 5,
   },
   progressBar: {
     width: '80%',
