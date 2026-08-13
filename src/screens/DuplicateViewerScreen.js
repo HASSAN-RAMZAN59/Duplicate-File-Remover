@@ -29,6 +29,7 @@ import BackArrowSvg from '../assets/back arrow.svg';
 import DelIconSvg from '../assets/del.svg';
 import GroupHeaderSvg from '../assets/scan resultgroup.svg';
 import PinIconSvg from '../assets/pin.svg';
+import EmptyStateSvg from '../assets/FILES AND FOLDER grad fill.svg';
 import LottieView from 'lottie-react-native';
 
 export const DuplicateViewerScreen = ({ route, navigation }) => {
@@ -479,6 +480,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       {/* Screen Body */}
       {duplicateGroups.length === 0 ? (
         <View style={styles.emptyContainer}>
+          <EmptyStateSvg width={120} height={120} style={{ marginBottom: 20 }} />
           <Text style={styles.emptySubtitle}>
             {t('storageCleanSub', `Your ${displayCategoryName} storage is clean! No duplicate items were detected.`).replace('{category}', displayCategoryName)}
           </Text>
