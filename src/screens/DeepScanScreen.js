@@ -310,7 +310,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
               const res = await deleteBatch(scanResults.allPreselectedFiles);
 
               Alert.alert(
-                t('cleanSuccessTitle', 'Deep Clean Successful 🎉'),
+                t('cleanSuccessTitle', 'Deep Clean Successful'),
                 t('cleanSuccessBody', `Removed ${res.deletedCount} duplicate items and freed ${res.freedFormatted} of storage!`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted)
               );
 

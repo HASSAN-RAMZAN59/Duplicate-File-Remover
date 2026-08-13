@@ -226,7 +226,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                 setIsDeleting(false);
 
                 if (res.success || res.totalMerged > 0) {
-                  Alert.alert('Contacts Merged 🎉', 'Contacts merged successfully');
+                  Alert.alert('Contacts Merged', 'Contacts merged successfully');
                   performScan();
                 } else {
                   Alert.alert(t('cleanupWarning', 'Merge Error'), t('someFilesNotRemoved', 'Could not merge selected contacts.'));
@@ -285,7 +285,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                   });
 
                   Alert.alert(
-                    t('cleanedSuccess', 'Cleaned Successfully 🎉'),
+                    t('cleanedSuccess', 'Cleaned Successfully'),
                     t('cleanedSuccessBody', `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted)
                   );
                 } else {
@@ -500,8 +500,6 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       {/* Screen Body */}
       {duplicateGroups.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>🎉</Text>
-          <Text style={styles.emptyTitle}>{t('noDuplicatesFound', 'No Duplicates Found')}</Text>
           <Text style={styles.emptySubtitle}>
             {t('storageCleanSub', `Your ${displayCategoryName} storage is clean! No duplicate items were detected.`).replace('{category}', displayCategoryName)}
           </Text>

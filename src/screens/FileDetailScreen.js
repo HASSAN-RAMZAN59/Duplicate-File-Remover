@@ -235,7 +235,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
               const res = await deleteSelectedFiles([file]);
               setIsDeleting(false);
               if (res.deletedCount > 0) {
-                Alert.alert(t('cleanedSuccess', 'Cleaned Successfully 🎉'), 'File deleted successfully.');
+                Alert.alert(t('cleanedSuccess', 'Cleaned Successfully'), 'File deleted successfully.');
                 navigation.goBack();
               } else {
                 Alert.alert(t('cleanupWarning', 'Deletion Failed'), 'Could not remove file.');
