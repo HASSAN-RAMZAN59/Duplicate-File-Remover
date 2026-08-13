@@ -476,27 +476,6 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
       <View style={styles.topTitleBarDivider} />
 
-      {/* 2. Review Duplicates Header Section */}
-      <View style={styles.reviewHeaderSection}>
-        <View style={styles.reviewHeaderLeft}>
-          <Text style={styles.reviewMainTitle}>{t('reviewDuplicates', 'Review Duplicates')}</Text>
-          <Text style={styles.reviewSubtitleLine}>
-            {t('reviewSubtitle', 'Select the files you want to remove. Keep at least one copy.')}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.autoSelectPillButton,
-            { backgroundColor: isAutoSelected ? '#306FFF' : '#464646' },
-          ]}
-          onPress={handleAutoSelect}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.autoSelectPillText}>{t('autoSelect', 'Auto Select')}</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Screen Body */}
       {duplicateGroups.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -506,6 +485,27 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
+          {/* 2. Review Duplicates Header Section */}
+          <View style={styles.reviewHeaderSection}>
+            <View style={styles.reviewHeaderLeft}>
+              <Text style={styles.reviewMainTitle}>{t('reviewDuplicates', 'Review Duplicates')}</Text>
+              <Text style={styles.reviewSubtitleLine}>
+                {t('reviewSubtitle', 'Select the files you want to remove. Keep at least one copy.')}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.autoSelectPillButton,
+                { backgroundColor: isAutoSelected ? '#306FFF' : '#464646' },
+              ]}
+              onPress={handleAutoSelect}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.autoSelectPillText}>{t('autoSelect', 'Auto Select')}</Text>
+            </TouchableOpacity>
+          </View>
+
           <FlatList
             data={duplicateGroups}
             keyExtractor={(item, idx) => item.groupId || `group_${idx}`}
