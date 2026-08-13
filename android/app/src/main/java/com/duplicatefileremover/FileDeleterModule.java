@@ -30,13 +30,17 @@ import com.facebook.react.bridge.WritableMap;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class FileDeleterModule extends ReactContextBaseJavaModule {
 
     private static final int DELETE_REQUEST_CODE = 9921;
     private final ReactApplicationContext reactContext;
+    private final ExecutorService thumbnailExecutor = Executors.newFixedThreadPool(4);
     private Promise pendingDeletePromise;
 
     private final ActivityEventListener mActivityEventListener = new BaseActivityEventListener() {
@@ -344,6 +348,9 @@ public class FileDeleterModule extends ReactContextBaseJavaModule {
     /**
      * Generates a video frame thumbnail as Base64 JPEG data URI for display in app previews
      */
+    /**
+     * Generates a video frame thumbnail saved to disk cache for ultra-fast async display
+     */
     @ReactMethod
     public void getVideoThumbnail(String rawFilePath, Promise promise) {
         if (rawFilePath == null || rawFilePath.isEmpty()) {
@@ -360,45 +367,45 @@ public class FileDeleterModule extends ReactContextBaseJavaModule {
             cleanPath = java.net.URLDecoder.decode(cleanPath, "UTF-8");
         } catch (Exception ignored) {}
 
-        File file = new File(cleanPath);
+        final String finalPath = cleanPath;
+        File file = new File(finalPath);
         if (!file.exists()) {
             promise.resolve(null);
             return;
         }
 
-        try {
-            Bitmap bitmap = null;
+        thumbnailExecutor.execute(() -> {
+            try {
+                // Disk Cache lookup key based on path + last modified time
+                String cacheKey = "vthumb_" + Math.abs((finalPath + "_" + file.lastModified()).hashCode()) + ".jpg";
+                File cacheDir = new File(reactContext.getCacheDir(), "v_thumbs");
+                if (!cacheDir.exists()) {
+                    cacheDir.mkdirs();
+                }
+                File cachedFile = new File(cacheDir, cacheKey);
 
-            // 1. Android 10+ ThumbnailUtils with File object
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                try {
-                    bitmap = ThumbnailUtils.createVideoThumbnail(file, new Size(300, 300), null);
-                } catch (Exception ignored) {}
-            }
+                if (cachedFile.exists() && cachedFile.length() > 0) {
+                    promise.resolve("file://" + cachedFile.getAbsolutePath());
+                    return;
+                }
 
-            // 2. Legacy ThumbnailUtils with path string
-            if (bitmap == null) {
-                try {
-                    bitmap = ThumbnailUtils.createVideoThumbnail(cleanPath, MediaStore.Images.Thumbnails.MINI_KIND);
-                } catch (Exception ignored) {}
-            }
+                Bitmap bitmap = null;
 
-            // 3. MediaMetadataRetriever via FileInputStream FileDescriptor (Guaranteed for WhatsApp/Downloads)
-            if (bitmap == null) {
+                // 1. Fast Scaled Keyframe Extraction via MediaMetadataRetriever
                 MediaMetadataRetriever retriever = null;
                 java.io.FileInputStream fis = null;
                 try {
                     retriever = new MediaMetadataRetriever();
                     fis = new java.io.FileInputStream(file);
                     retriever.setDataSource(fis.getFD());
-                    bitmap = retriever.getFrameAtTime();
-                } catch (Exception e) {
-                    try {
-                        if (retriever != null) {
-                            retriever.setDataSource(cleanPath);
-                            bitmap = retriever.getFrameAtTime();
-                        }
-                    } catch (Exception ignored) {}
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        bitmap = retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 160, 160);
+                    }
+                    if (bitmap == null) {
+                        bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                    }
+                } catch (Exception ignored) {
                 } finally {
                     if (fis != null) {
                         try { fis.close(); } catch (Exception ignored) {}
@@ -407,20 +414,43 @@ public class FileDeleterModule extends ReactContextBaseJavaModule {
                         try { retriever.release(); } catch (Exception ignored) {}
                     }
                 }
-            }
 
-            if (bitmap != null) {
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 70, byteArrayOutputStream);
-                byte[] byteArray = byteArrayOutputStream.toByteArray();
-                String encoded = Base64.encodeToString(byteArray, Base64.NO_WRAP);
-                promise.resolve("data:image/jpeg;base64," + encoded);
-            } else {
+                // 2. Android 10+ ThumbnailUtils with Size constraint
+                if (bitmap == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        bitmap = ThumbnailUtils.createVideoThumbnail(file, new Size(160, 160), null);
+                    } catch (Exception ignored) {}
+                }
+
+                // 3. Legacy ThumbnailUtils
+                if (bitmap == null) {
+                    try {
+                        bitmap = ThumbnailUtils.createVideoThumbnail(finalPath, MediaStore.Images.Thumbnails.MINI_KIND);
+                    } catch (Exception ignored) {}
+                }
+
+                if (bitmap != null) {
+                    if (bitmap.getWidth() > 240 || bitmap.getHeight() > 240) {
+                        Bitmap scaled = Bitmap.createScaledBitmap(bitmap, 160, 160, true);
+                        if (scaled != bitmap) {
+                            bitmap.recycle();
+                            bitmap = scaled;
+                        }
+                    }
+                    FileOutputStream fos = new FileOutputStream(cachedFile);
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 75, fos);
+                    fos.flush();
+                    fos.close();
+                    bitmap.recycle();
+
+                    promise.resolve("file://" + cachedFile.getAbsolutePath());
+                } else {
+                    promise.resolve(null);
+                }
+            } catch (Exception e) {
                 promise.resolve(null);
             }
-        } catch (Exception e) {
-            promise.resolve(null);
-        }
+        });
     }
 
     /**

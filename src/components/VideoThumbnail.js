@@ -8,7 +8,7 @@ const thumbnailCache = new Map();
  * High-performance Video Thumbnail Component
  * Generates and displays actual video frame thumbnails using Native Android ThumbnailUtils / MediaMetadataRetriever
  */
-export const VideoThumbnail = ({
+export const VideoThumbnail = React.memo(({
   filePath,
   style,
   resizeMode = 'cover',
@@ -36,10 +36,10 @@ export const VideoThumbnail = ({
       try {
         const NativeFileDeleter = NativeModules.NativeFileDeleter;
         if (NativeFileDeleter && typeof NativeFileDeleter.getVideoThumbnail === 'function') {
-          const base64Uri = await NativeFileDeleter.getVideoThumbnail(filePath);
-          if (base64Uri && isMounted) {
-            thumbnailCache.set(filePath, base64Uri);
-            setThumbUri(base64Uri);
+          const resultUri = await NativeFileDeleter.getVideoThumbnail(filePath);
+          if (resultUri && isMounted) {
+            thumbnailCache.set(filePath, resultUri);
+            setThumbUri(resultUri);
           }
         }
       } catch (err) {
@@ -81,7 +81,7 @@ export const VideoThumbnail = ({
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
