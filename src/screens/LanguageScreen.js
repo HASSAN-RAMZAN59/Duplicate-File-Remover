@@ -15,6 +15,8 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 import { ROUTES } from '../navigation/routes';
 import { useTranslation } from '../context/LanguageContext';
 
+import BackArrowSvg from '../assets/back arrow.svg';
+
 const FlagIcon = ({ id }) => {
   const flags = {
     'en': '🇬🇧',
@@ -63,14 +65,19 @@ export const LanguageScreen = ({ navigation }) => {
     // 1. Save selected language in storage & settingsService
     await changeLanguage(selectedLanguage);
 
-    // Reset onboarding completed flag so all 3 onboarding slides play after permission screen
-    await storageService.setItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING, false);
+    const hasCompleted = await storageService.getItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING);
+    const isCompleted = hasCompleted === true || hasCompleted === 'true';
 
-    // 2. Navigate to Permissions screen next
-    navigation.reset({
-      index: 0,
-      routes: [{ name: ROUTES.PERMISSIONS }],
-    });
+    if (isCompleted || navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      // First time onboarding flow:
+      await storageService.setItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING, false);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: ROUTES.PERMISSIONS }],
+      });
+    }
   };
 
   return (
@@ -80,13 +87,27 @@ export const LanguageScreen = ({ navigation }) => {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('selectLanguage', 'Select Language')}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {navigation.canGoBack() && (
+              <TouchableOpacity
+                style={{ marginRight: 12 }}
+                onPress={() => navigation.goBack()}
+                activeOpacity={0.7}
+              >
+                <BackArrowSvg width={28} height={28} />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.headerTitle}>{t('selectLanguage', 'Select Language')}</Text>
+          </View>
+
           <TouchableOpacity
             style={styles.nextBtn}
             onPress={handleNext}
             activeOpacity={0.8}
           >
-            <Text style={styles.nextBtnText}>{t('next', 'Next')}</Text>
+            <Text style={styles.nextBtnText}>
+              {navigation.canGoBack() ? t('done', 'Done') : t('next', 'Next')}
+            </Text>
           </TouchableOpacity>
         </View>
 

@@ -279,16 +279,20 @@ export const permissionService = {
     const audioStatus = await permissionService.checkPermission(PERMISSION_TYPES.AUDIO);
     const photosStatus = await permissionService.checkPermission(PERMISSION_TYPES.PHOTOS);
     const contactsStatus = await permissionService.checkPermission(PERMISSION_TYPES.CONTACTS);
+    const isAllFilesGranted = await permissionService.checkAllFilesAccess();
+    const allFilesStatus = isAllFilesGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
 
     const isAudioOk = audioStatus === PERMISSION_STATUS.GRANTED;
     const isPhotosOk = photosStatus === PERMISSION_STATUS.GRANTED;
     const isContactsOk = contactsStatus === PERMISSION_STATUS.GRANTED;
+    const isAllFilesOk = isAllFilesGranted;
 
     return {
       audio: audioStatus,
       photos: photosStatus,
       contacts: contactsStatus,
-      areAllGranted: isAudioOk && isPhotosOk && isContactsOk,
+      allFiles: allFilesStatus,
+      areAllGranted: isAudioOk && isPhotosOk && isContactsOk && isAllFilesOk,
     };
   },
 

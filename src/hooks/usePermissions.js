@@ -11,6 +11,7 @@ export function usePermissions() {
   const [photosStatus, setPhotosStatus] = useState(PERMISSION_STATUS.DENIED);
   const [storageStatus, setStorageStatus] = useState(PERMISSION_STATUS.DENIED);
   const [contactsStatus, setContactsStatus] = useState(PERMISSION_STATUS.DENIED);
+  const [allFilesStatus, setAllFilesStatus] = useState(PERMISSION_STATUS.DENIED);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshPermissions = useCallback(async () => {
@@ -20,6 +21,7 @@ export function usePermissions() {
       setAudioStatus(results.audio);
       setPhotosStatus(results.photos);
       setContactsStatus(results.contacts);
+      setAllFilesStatus(results.allFiles || PERMISSION_STATUS.DENIED);
     } catch (error) {
       console.error('[usePermissions] Error refreshing permissions:', error);
     } finally {
@@ -66,6 +68,14 @@ export function usePermissions() {
     return res;
   };
 
+  const requestAllFiles = async () => {
+    await permissionService.requestAllFilesAccess();
+    const isGranted = await permissionService.checkAllFilesAccess();
+    const status = isGranted ? PERMISSION_STATUS.GRANTED : PERMISSION_STATUS.DENIED;
+    setAllFilesStatus(status);
+    return status;
+  };
+
   const openSettings = async () => {
     await permissionService.openAppSettings();
   };
@@ -74,28 +84,33 @@ export function usePermissions() {
   const isPhotosGranted = photosStatus === PERMISSION_STATUS.GRANTED;
   const isStorageGranted = storageStatus === PERMISSION_STATUS.GRANTED;
   const isContactsGranted = contactsStatus === PERMISSION_STATUS.GRANTED;
+  const isAllFilesGranted = allFilesStatus === PERMISSION_STATUS.GRANTED;
 
   const isAudioOk = isAudioGranted || isStorageGranted;
   const isPhotosOk = isPhotosGranted || isStorageGranted;
   const isContactsOk = isContactsGranted;
+  const isAllFilesOk = isAllFilesGranted;
 
-  const areAllPermissionsGranted = isAudioOk && isPhotosOk && isContactsOk;
+  const areAllPermissionsGranted = isAudioOk && isPhotosOk && isContactsOk && isAllFilesOk;
 
   return {
     audioStatus,
     photosStatus,
     storageStatus,
     contactsStatus,
+    allFilesStatus,
     isLoading,
     isAudioGranted,
     isPhotosGranted,
     isStorageGranted,
     isContactsGranted,
+    isAllFilesGranted,
     areAllPermissionsGranted,
     requestAudio,
     requestPhotos,
     requestStorage,
     requestContacts,
+    requestAllFiles,
     openSettings,
     refreshPermissions,
   };
