@@ -480,7 +480,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       {/* Screen Body */}
       {duplicateGroups.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <EmptyStateSvg width={120} height={120} style={{ marginBottom: 20 }} />
+          <EmptyStateSvg width={120} height={181} style={{ marginBottom: 20 }} />
           <Text style={styles.emptySubtitle}>
             {t('storageCleanSub', `Your ${displayCategoryName} storage is clean! No duplicate items were detected.`).replace('{category}', displayCategoryName)}
           </Text>
