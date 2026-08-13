@@ -17,33 +17,32 @@ import { permissionService } from '../services/permissionService';
 import { storageService } from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { ROUTES } from '../navigation/routes';
+import { useTranslation } from '../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
-const SLIDES = [
-  {
-    id: '1',
-    title: 'Find & Remove Duplicates',
-    subtitle:
-      'Quickly find duplicate photos, videos, and documents that are taking up unnecessary space.',
-  },
-  {
-    id: '2',
-    title: 'Organize Your Gallery',
-    subtitle:
-      'Sort Your files by category and keep your most important memories organized and easy to find',
-  },
-  {
-    id: '3',
-    title: 'Fast and Secure',
-    subtitle:
-      'Clean your device in seconds.Your personal files are always protected during the scan',
-  },
-];
-
 export const OnboardingScreen = ({ navigation }) => {
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
+
+  const SLIDES = [
+    {
+      id: '1',
+      title: t('slide1Title', 'Find & Remove Duplicates'),
+      subtitle: t('slide1Subtitle', 'Quickly find duplicate photos, videos, and documents that are taking up unnecessary space.'),
+    },
+    {
+      id: '2',
+      title: t('slide2Title', 'Organize Your Gallery'),
+      subtitle: t('slide2Subtitle', 'Sort your files by category and keep your most important memories organized and easy to find.'),
+    },
+    {
+      id: '3',
+      title: t('slide3Title', 'Fast and Secure'),
+      subtitle: t('slide3Subtitle', 'Clean your device in seconds. Your personal files are always protected during the scan.'),
+    },
+  ];
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
@@ -153,7 +152,7 @@ export const OnboardingScreen = ({ navigation }) => {
           activeOpacity={0.85}
         >
           <Text style={styles.buttonText}>
-            {isLastSlide ? 'Get Started' : 'Next'}
+            {isLastSlide ? t('getStarted', 'Get Started') : t('next', 'Next')}
           </Text>
           <ForwardSvg width={12} height={12} style={styles.buttonIcon} />
         </TouchableOpacity>

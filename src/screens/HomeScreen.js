@@ -16,6 +16,7 @@ import RNFS from 'react-native-fs';
 import { useFocusEffect } from '@react-navigation/native';
 import { ROUTES } from '../navigation/routes';
 import { formatBytes } from '../engine/hashEngine';
+import { useTranslation } from '../context/LanguageContext';
 
 import SettingSvg from '../assets/home screen/setting.svg';
 import DocsSvg from '../assets/home screen/docs.svg';
@@ -36,6 +37,7 @@ const PlaceholderIcon = ({ size = 20, borderRadius = 4 }) => (
 );
 
 export const HomeScreen = ({ navigation }) => {
+  const { t } = useTranslation();
   const [isScanning, setIsScanning] = useState(false);
   const [usedPercentage, setUsedPercentage] = useState(0);
   const [displayPercentage, setDisplayPercentage] = useState(0);
@@ -157,29 +159,29 @@ export const HomeScreen = ({ navigation }) => {
           </Svg>
           <View style={styles.progressTextContainer}>
             <Text style={styles.progressPercentage}>{displayPercentage}%</Text>
-            <Text style={styles.progressLabel}>USED</Text>
+            <Text style={styles.progressLabel}>{t('storageUsed', 'USED')}</Text>
           </View>
         </View>
 
         {/* Text Section */}
-        <Text style={styles.readyTitle}>Ready to clean up?</Text>
+        <Text style={styles.readyTitle}>{t('readyTitle', 'Ready to clean up?')}</Text>
         <Text style={styles.readySubtitle}>
-          Scan your device to find and remove duplicate files, freeing up valuable space.
+          {t('readySubtitle', 'Scan your device to find and remove duplicate files, freeing up valuable space.')}
         </Text>
 
         {/* Full System Scan Button */}
         <TouchableOpacity style={styles.fullSystemScanBtn} activeOpacity={0.8} onPress={handleFullScan}>
           <FullScanSvg width={18} height={18} />
-          <Text style={styles.fullSystemScanText}>Full System Scan</Text>
+          <Text style={styles.fullSystemScanText}>{t('deepScan', 'Full System Scan')}</Text>
         </TouchableOpacity>
 
         {/* Categories Grid */}
         <View style={styles.grid}>
           {[
-            { id: 'photos', name: 'Photos', size: categoryStats.photos, icon: <PhotosSvg width={24} height={24} /> },
-            { id: 'videos', name: 'Videos', size: categoryStats.videos, icon: <VideosSvg width={24} height={24} /> },
-            { id: 'audio', name: 'Audio', size: categoryStats.audio, icon: <AudioSvg width={24} height={24} /> },
-            { id: 'docs', name: 'Docs', size: categoryStats.docs, icon: <DocsSvg width={24} height={24} /> },
+            { id: 'photos', name: t('similarPhotos', 'Photos'), size: categoryStats.photos, icon: <PhotosSvg width={24} height={24} /> },
+            { id: 'videos', name: t('duplicateVideos', 'Videos'), size: categoryStats.videos, icon: <VideosSvg width={24} height={24} /> },
+            { id: 'audio', name: t('audioFiles', 'Audio'), size: categoryStats.audio, icon: <AudioSvg width={24} height={24} /> },
+            { id: 'docs', name: t('documents', 'Docs'), size: categoryStats.docs, icon: <DocsSvg width={24} height={24} /> },
           ].map((category) => {
             const isSelected = selectedCategories.includes(category.id);
             return (
@@ -211,13 +213,13 @@ export const HomeScreen = ({ navigation }) => {
         {/* Bottom Scan Now Button */}
         <TouchableOpacity style={styles.scanNowBtn} activeOpacity={0.9} onPress={handleScanNow}>
           <SearchSvg width={20} height={20} />
-          <Text style={styles.scanNowBtnText}>Scan Now</Text>
+          <Text style={styles.scanNowBtnText}>{t('next', 'Scan Now')}</Text>
         </TouchableOpacity>
 
         {/* Bottom Safe Scan Info */}
         <View style={styles.safeScanInfoRow}>
           <SafeScanSvg width={14} height={14} />
-          <Text style={styles.safeScanText}>Safe Scan: System files are protected</Text>
+          <Text style={styles.safeScanText}>{t('safeScanText', 'Safe Scan: System files are protected')}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

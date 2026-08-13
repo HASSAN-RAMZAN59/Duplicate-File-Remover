@@ -17,6 +17,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { ROUTES } from '../navigation/routes';
 import { runDeepScan } from '../engine/deepScanEngine';
 import { deleteBatch } from '../engine/fileDeleter';
+import { useTranslation } from '../context/LanguageContext';
 import BackArrowSvg from '../assets/back arrow.svg';
 import ImagesCategorySvg from '../assets/full scan/Overlay.svg';
 import VideosCategorySvg from '../assets/full scan/video.svg';
@@ -194,6 +195,7 @@ const getCategoryIcon = (name) => {
 };
 
 export const DeepScanScreen = ({ navigation, route }) => {
+  const { t } = useTranslation();
   const [isScanning, setIsScanning] = useState(true);
   const [scanProgress, setScanProgress] = useState(0);
   const [currentCategory, setCurrentCategory] = useState('');
@@ -202,6 +204,17 @@ export const DeepScanScreen = ({ navigation, route }) => {
 
   const selectedCategoryIds = route?.params?.selectedCategoryIds;
   const isCancelledRef = useRef(false);
+
+  const getTranslatedCategoryName = (name) => {
+    if (!name) return '';
+    const norm = name.toLowerCase();
+    if (norm.includes('image') || norm.includes('photo')) return t('similarPhotos', 'Photos');
+    if (norm.includes('video')) return t('duplicateVideos', 'Videos');
+    if (norm.includes('audio') || norm.includes('music')) return t('audioFiles', 'Audio');
+    if (norm.includes('doc')) return t('documents', 'Docs');
+    if (norm.includes('contact')) return t('contacts', 'Contacts');
+    return name;
+  };
 
   const handleCancelScan = () => {
     isCancelledRef.current = true;
@@ -212,7 +225,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
   const handleStartDeepScan = async () => {
     setIsScanning(true);
     setScanProgress(0);
-    setCurrentCategory('Initializing...');
+    setCurrentCategory(t('initializing', 'Initializing...'));
 
     let shouldKeepScanningState = false;
     try {
@@ -275,7 +288,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
   // Clean All Handler
   const handleCleanAll = () => {
     if (!scanResults || !scanResults.allPreselectedFiles || scanResults.allPreselectedFiles.length === 0) {
-      Alert.alert('No Duplicates', 'There are no duplicates selected to clean.');
+      Alert.alert(t('noDuplicates', 'No Duplicates'), t('noDuplicatesSelected', 'There are no duplicates selected to clean.'));
       return;
     }
 
@@ -283,12 +296,12 @@ export const DeepScanScreen = ({ navigation, route }) => {
     const formattedSize = scanResults.totalReclaimableFormatted;
 
     Alert.alert(
-      'Clean All Duplicates',
-      `Are you sure you want to permanently delete all ${fileCount} duplicate items and free up ${formattedSize} of storage?`,
+      t('cleanAllTitle', 'Clean All Duplicates'),
+      t('cleanAllBody', `Are you sure you want to permanently delete all ${fileCount} duplicate items and free up ${formattedSize} of storage?`).replace('{count}', fileCount).replace('{size}', formattedSize),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel', 'Cancel'), style: 'cancel' },
         {
-          text: 'Clean All Now',
+          text: t('cleanAllNow', 'Clean All Now'),
           style: 'destructive',
           onPress: async () => {
             setIsCleaning(true);
@@ -297,14 +310,14 @@ export const DeepScanScreen = ({ navigation, route }) => {
               const res = await deleteBatch(scanResults.allPreselectedFiles);
 
               Alert.alert(
-                'Deep Clean Successful 🎉',
-                `Removed ${res.deletedCount} duplicate items and freed ${res.freedFormatted} of storage!`
+                t('cleanSuccessTitle', 'Deep Clean Successful 🎉'),
+                t('cleanSuccessBody', `Removed ${res.deletedCount} duplicate items and freed ${res.freedFormatted} of storage!`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted)
               );
 
               // Re-run scan to refresh state
               handleStartDeepScan();
             } catch (err) {
-              Alert.alert('Cleanup Warning', 'Some files could not be removed.');
+              Alert.alert(t('cleanupWarning', 'Cleanup Warning'), t('someFilesNotRemoved', 'Some files could not be removed.'));
             } finally {
               setIsCleaning(false);
             }
@@ -342,9 +355,9 @@ export const DeepScanScreen = ({ navigation, route }) => {
           <View style={styles.loadingContainer}>
             {/* Top Titles */}
             <View style={{ alignItems: 'center' }}>
-              <Text style={styles.scanHeaderTitle}>Scanning Drive...</Text>
+              <Text style={styles.scanHeaderTitle}>{t('scanningDrive', 'Scanning Drive...')}</Text>
               <Text style={styles.scanHeaderSubtitle}>
-                Looking for duplicate files and wasted space.
+                {t('scanningSub', 'Looking for duplicate files and wasted space.')}
               </Text>
             </View>
 
@@ -364,7 +377,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
               activeOpacity={0.8}
               onPress={handleCancelScan}
             >
-              <Text style={styles.cancelScanText}>Cancel Scan</Text>
+              <Text style={styles.cancelScanText}>{t('cancelScan', 'Cancel Scan')}</Text>
             </TouchableOpacity>
 
             {/* Bottom Real-time Small Progress Circle */}
@@ -382,9 +395,9 @@ export const DeepScanScreen = ({ navigation, route }) => {
                 valueString={scanResults?.totalReclaimableFormatted || '0 B'}
               />
 
-              <Text style={styles.scanCompleteTitle}>Scan Complete</Text>
+              <Text style={styles.scanCompleteTitle}>{t('scanComplete', 'Scan Complete')}</Text>
               <Text style={styles.scanCompleteSubtitle}>
-                You can reclaim {scanResults?.totalReclaimableFormatted || '0 B'} of space.
+                {t('reclaimSpace', `You can reclaim ${scanResults?.totalReclaimableFormatted || '0 B'} of space.`).replace('{size}', scanResults?.totalReclaimableFormatted || '0 B')}
               </Text>
             </View>
 
@@ -398,12 +411,12 @@ export const DeepScanScreen = ({ navigation, route }) => {
               {isCleaning ? (
                 <ActivityIndicator size="small" color="#0F172A" />
               ) : (
-                <Text style={styles.cleanAllButtonText}>Clean All Now</Text>
+                <Text style={styles.cleanAllButtonText}>{t('cleanAllNow', 'Clean All Now')}</Text>
               )}
             </TouchableOpacity>
 
             {/* Categories Section Header */}
-            <Text style={styles.categoriesHeader}>Categories</Text>
+            <Text style={styles.categoriesHeader}>{t('categories', 'Categories')}</Text>
 
             {/* Category Cards List */}
             {categoryList.length > 0 ? (
@@ -424,19 +437,19 @@ export const DeepScanScreen = ({ navigation, route }) => {
                   </View>
 
                   <View style={styles.categoryDetails}>
-                    <Text style={styles.categoryName}>{cat.name}</Text>
-                    <Text style={styles.categoryFileCount}>{cat.duplicateCount} files</Text>
+                    <Text style={styles.categoryName}>{getTranslatedCategoryName(cat.name)}</Text>
+                    <Text style={styles.categoryFileCount}>{cat.duplicateCount} {t('files', 'files')}</Text>
                   </View>
 
                   <View style={styles.categoryRight}>
                     <Text style={styles.categorySize}>{cat.reclaimableFormatted}</Text>
-                    <Text style={styles.categoryViewText}>View</Text>
+                    <Text style={styles.categoryViewText}>{t('view', 'View')}</Text>
                   </View>
                 </TouchableOpacity>
               ))
             ) : (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No Categories Found</Text>
+                <Text style={styles.emptyText}>{t('noCategoriesFound', 'No Categories Found')}</Text>
               </View>
             )}
           </>

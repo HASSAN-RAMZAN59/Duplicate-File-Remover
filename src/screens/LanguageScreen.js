@@ -13,6 +13,7 @@ import { permissionService } from '../services/permissionService';
 import { updateSetting } from '../services/settingsService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { ROUTES } from '../navigation/routes';
+import { useTranslation } from '../context/LanguageContext';
 
 const FlagIcon = ({ id }) => {
   const flags = {
@@ -44,26 +45,23 @@ const LANGUAGES = [
 ];
 
 export const LanguageScreen = ({ navigation }) => {
-  const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const { language, changeLanguage, t } = useTranslation();
+  const [selectedLanguage, setSelectedLanguage] = useState(language || 'en');
 
   useEffect(() => {
-    const loadSavedLanguage = async () => {
-      const savedLang = await storageService.getItem(STORAGE_KEYS.SELECTED_LANGUAGE);
-      if (savedLang) {
-        setSelectedLanguage(savedLang);
-      }
-    };
-    loadSavedLanguage();
-  }, []);
+    if (language) {
+      setSelectedLanguage(language);
+    }
+  }, [language]);
+
+  const handleSelectLanguage = (langId) => {
+    setSelectedLanguage(langId);
+    changeLanguage(langId);
+  };
 
   const handleNext = async () => {
     // 1. Save selected language in storage & settingsService
-    await storageService.setItem(STORAGE_KEYS.SELECTED_LANGUAGE, selectedLanguage);
-
-    const langObj = LANGUAGES.find((l) => l.id === selectedLanguage);
-    if (langObj) {
-      await updateSetting('language', langObj.name);
-    }
+    await changeLanguage(selectedLanguage);
 
     // Reset onboarding completed flag so all 3 onboarding slides play after permission screen
     await storageService.setItem(STORAGE_KEYS.HAS_COMPLETED_ONBOARDING, false);
@@ -75,8 +73,6 @@ export const LanguageScreen = ({ navigation }) => {
     });
   };
 
-
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#1E1E1E" translucent={false} />
@@ -84,13 +80,13 @@ export const LanguageScreen = ({ navigation }) => {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Select Language</Text>
+          <Text style={styles.headerTitle}>{t('selectLanguage', 'Select Language')}</Text>
           <TouchableOpacity
             style={styles.nextBtn}
             onPress={handleNext}
             activeOpacity={0.8}
           >
-            <Text style={styles.nextBtnText}>Next</Text>
+            <Text style={styles.nextBtnText}>{t('next', 'Next')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -109,7 +105,7 @@ export const LanguageScreen = ({ navigation }) => {
                   styles.languageCard,
                   isSelected ? styles.selectedCard : styles.unselectedCard,
                 ]}
-                onPress={() => setSelectedLanguage(lang.id)}
+                onPress={() => handleSelectLanguage(lang.id)}
                 activeOpacity={0.85}
               >
                 <View style={styles.leftSection}>

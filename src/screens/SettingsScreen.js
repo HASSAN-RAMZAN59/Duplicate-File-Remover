@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { ROUTES } from '../navigation/routes';
 import { loadSettings, updateSetting, DEFAULT_SETTINGS } from '../services/settingsService';
+import { useTranslation } from '../context/LanguageContext';
 import BackArrowSvg from '../assets/back arrow.svg';
 import LanguageSvg from '../assets/language.svg';
 import IgnoreSvg from '../assets/ignore.svg';
@@ -28,12 +29,24 @@ import ExternalLinkSvg from '../assets/version 2.svg';
 const AUTO_SCAN_OPTIONS = ['Off', 'Daily', 'Weekly', 'Monthly'];
 
 export const SettingsScreen = ({ navigation }) => {
+  const { t, language } = useTranslation();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAutoScanModalVisible, setIsAutoScanModalVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
+
+  const langNames = {
+    en: 'English',
+    ar: 'Arabic',
+    fr: 'French',
+    de: 'German',
+    zh: 'Chinese',
+    pt: 'Portuguese',
+    es: 'Spanish',
+    ru: 'Russian',
+  };
 
   const showThemedToast = (msg) => {
     setToastMessage(msg);
@@ -77,10 +90,20 @@ export const SettingsScreen = ({ navigation }) => {
     };
   }, [navigation]);
 
+  const getOptionLabel = (opt) => {
+    switch (opt) {
+      case 'Off': return t('off', 'Off');
+      case 'Daily': return t('daily', 'Daily');
+      case 'Weekly': return t('weekly', 'Weekly');
+      case 'Monthly': return t('monthly', 'Monthly');
+      default: return opt;
+    }
+  };
+
   const handleToggle = async (key, value) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     await updateSetting(key, value);
-    showThemedToast('Setting updated successfully');
+    showThemedToast(t('settingUpdated', 'Setting updated successfully'));
   };
 
   const handleSelectAutoScan = async (option) => {
@@ -89,7 +112,7 @@ export const SettingsScreen = ({ navigation }) => {
   };
 
   const handleRateUs = () => {
-    showThemedToast('Thank you for supporting us!');
+    showThemedToast(t('thankYouSupport', 'Thank you for supporting us!'));
   };
 
   return (
@@ -106,13 +129,13 @@ export const SettingsScreen = ({ navigation }) => {
         >
           <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Setting</Text>
+        <Text style={styles.headerTitle}>{t('settings', 'Settings')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* SECTION 1: GENERAL */}
-        <Text style={styles.sectionHeader}>GENERAL</Text>
+        <Text style={styles.sectionHeader}>{t('general', 'GENERAL')}</Text>
         <View style={styles.cardContainer}>
           {/* Language */}
           <TouchableOpacity
@@ -124,17 +147,17 @@ export const SettingsScreen = ({ navigation }) => {
               <LanguageSvg width={20} height={20} />
             </View>
             <View style={styles.labelContainer}>
-              <Text style={styles.rowTitle}>Language</Text>
+              <Text style={styles.rowTitle}>{t('language', 'Language')}</Text>
             </View>
             <View style={styles.valueGroup}>
-              <Text style={styles.valueText}>{settings.language || 'English'}</Text>
+              <Text style={styles.valueText}>{langNames[language] || settings.language || 'English'}</Text>
               <Text style={styles.chevron}>›</Text>
             </View>
           </TouchableOpacity>
         </View>
 
         {/* SECTION 2: SCANNING SETTINGS */}
-        <Text style={styles.sectionHeader}>SCANNING SETTINGS</Text>
+        <Text style={styles.sectionHeader}>{t('scanningSettings', 'SCANNING SETTINGS')}</Text>
         <View style={styles.cardContainer}>
           {/* Ignore Small Files */}
           <View style={styles.row}>
@@ -142,8 +165,8 @@ export const SettingsScreen = ({ navigation }) => {
               <IgnoreSvg width={20} height={20} />
             </View>
             <View style={styles.labelContainer}>
-              <Text style={styles.rowTitle}>Ignore Small Files</Text>
-              <Text style={styles.rowSubtitle}>Exclude files under 1MB</Text>
+              <Text style={styles.rowTitle}>{t('ignoreSmallFiles', 'Ignore Small Files')}</Text>
+              <Text style={styles.rowSubtitle}>{t('excludeSmallFiles', 'Exclude files under 1MB')}</Text>
             </View>
             <Switch
               value={!!settings.ignoreSmallFiles}
@@ -166,17 +189,17 @@ export const SettingsScreen = ({ navigation }) => {
               <AutomaticSvg width={20} height={20} />
             </View>
             <View style={styles.labelContainer}>
-              <Text style={styles.rowTitle}>Automatic Scanning</Text>
+              <Text style={styles.rowTitle}>{t('automaticScanning', 'Automatic Scanning')}</Text>
             </View>
             <View style={styles.valueGroup}>
-              <Text style={styles.valueText}>{settings.automaticScanning || 'Weekly'}</Text>
+              <Text style={styles.valueText}>{getOptionLabel(settings.automaticScanning || 'Weekly')}</Text>
               <Text style={styles.chevron}>›</Text>
             </View>
           </TouchableOpacity>
         </View>
 
         {/* SECTION 3: SUPPORT & ABOUT */}
-        <Text style={styles.sectionHeader}>SUPPORT & ABOUT</Text>
+        <Text style={styles.sectionHeader}>{t('supportAbout', 'SUPPORT & ABOUT')}</Text>
         <View style={styles.cardContainer}>
           {/* Rate Us */}
           <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={handleRateUs}>
@@ -184,7 +207,7 @@ export const SettingsScreen = ({ navigation }) => {
               <RateUsSvg width={20} height={20} />
             </View>
             <View style={styles.labelContainer}>
-              <Text style={styles.rowTitle}>Rate Us</Text>
+              <Text style={styles.rowTitle}>{t('rateUs', 'Rate Us')}</Text>
             </View>
             <ExternalLinkSvg width={14} height={14} />
           </TouchableOpacity>
@@ -201,7 +224,7 @@ export const SettingsScreen = ({ navigation }) => {
               <PrivacySvg width={20} height={20} />
             </View>
             <View style={styles.labelContainer}>
-              <Text style={styles.rowTitle}>Privacy Policy</Text>
+              <Text style={styles.rowTitle}>{t('privacyPolicy', 'Privacy Policy')}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
@@ -214,7 +237,7 @@ export const SettingsScreen = ({ navigation }) => {
               <VersionSvg width={20} height={20} />
             </View>
             <View style={styles.labelContainer}>
-              <Text style={styles.rowTitle}>Version</Text>
+              <Text style={styles.rowTitle}>{t('version', 'Version')}</Text>
             </View>
             <Text style={styles.versionText}>v1.0.0</Text>
           </View>
@@ -232,8 +255,8 @@ export const SettingsScreen = ({ navigation }) => {
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
               <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Automatic Scanning</Text>
-                <Text style={styles.modalSubtitle}>Select scan frequency</Text>
+                <Text style={styles.modalTitle}>{t('automaticScanning', 'Automatic Scanning')}</Text>
+                <Text style={styles.modalSubtitle}>{t('selectScanFrequency', 'Select scan frequency')}</Text>
 
                 {AUTO_SCAN_OPTIONS.map((option) => {
                   const isSelected = (settings.automaticScanning || 'Weekly') === option;
@@ -245,7 +268,7 @@ export const SettingsScreen = ({ navigation }) => {
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
-                        {option}
+                        {getOptionLabel(option)}
                       </Text>
                       {isSelected && <Text style={styles.checkmark}>✓</Text>}
                     </TouchableOpacity>

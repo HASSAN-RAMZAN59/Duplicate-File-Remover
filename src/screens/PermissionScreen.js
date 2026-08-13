@@ -15,12 +15,14 @@ import { permissionService } from '../services/permissionService';
 import { storageService } from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { ROUTES } from '../navigation/routes';
+import { useTranslation } from '../context/LanguageContext';
 import MainPermissionSvg from '../assets/permsiion/main.svg';
 import ContactPermissionSvg from '../assets/permsiion/contact.svg';
 import MusicPermissionSvg from '../assets/permsiion/music.svg';
 import PhotoPermissionSvg from '../assets/permsiion/photo.svg';
 
 export const PermissionScreen = ({ navigation }) => {
+  const { t } = useTranslation();
   const {
     isAudioGranted,
     isPhotosGranted,
@@ -71,11 +73,11 @@ export const PermissionScreen = ({ navigation }) => {
       });
     } else {
       Alert.alert(
-        'Permissions Required',
-        'All 3 permissions (Contacts, Music & Audio, Photos & Videos) must be granted to continue.',
+        t('permissionsRequiredTitle', 'Permissions Required'),
+        t('permissionsRequiredBody', 'All 3 permissions (Contacts, Music & Audio, Photos & Videos) must be granted to continue.'),
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: openSettings },
+          { text: t('cancel', 'Cancel'), style: 'cancel' },
+          { text: t('openSettings', 'Open Settings'), onPress: openSettings },
         ]
       );
     }
@@ -120,7 +122,7 @@ export const PermissionScreen = ({ navigation }) => {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header Title */}
-        <Text style={styles.headerTitle}>App Permissions</Text>
+        <Text style={styles.headerTitle}>{t('appPermissions', 'App Permissions')}</Text>
 
         {/* App Badge Header */}
         <View style={styles.badgeSection}>
@@ -140,9 +142,9 @@ export const PermissionScreen = ({ navigation }) => {
             <ContactPermissionSvg width={44} height={44} />
           </View>
           <View style={styles.labelContainer}>
-            <Text style={styles.cardTitle}>Contacts</Text>
+            <Text style={styles.cardTitle}>{t('contacts', 'Contacts')}</Text>
             <Text style={styles.cardSubtitle}>
-              Required to scan and remove duplicate files from your device.
+              {t('contactsSubtitle', 'Required to scan and remove duplicate files from your device.')}
             </Text>
           </View>
           <Switch
@@ -163,9 +165,9 @@ export const PermissionScreen = ({ navigation }) => {
             <MusicPermissionSvg width={44} height={44} />
           </View>
           <View style={styles.labelContainer}>
-            <Text style={styles.cardTitle}>Music & Audio</Text>
+            <Text style={styles.cardTitle}>{t('musicAudio', 'Music & Audio')}</Text>
             <Text style={styles.cardSubtitle}>
-              Required to identify duplicate images and videos in your media library.
+              {t('musicSubtitle', 'Required to identify duplicate images and videos in your media library.')}
             </Text>
           </View>
           <Switch
@@ -186,9 +188,9 @@ export const PermissionScreen = ({ navigation }) => {
             <PhotoPermissionSvg width={44} height={44} />
           </View>
           <View style={styles.labelContainer}>
-            <Text style={styles.cardTitle}>Photos & Videos</Text>
+            <Text style={styles.cardTitle}>{t('photosVideos', 'Photos & Videos')}</Text>
             <Text style={styles.cardSubtitle}>
-              Stay updated on scan results and scheduled cleanup reminders.
+              {t('photosSubtitle', 'Stay updated on scan results and scheduled cleanup reminders.')}
             </Text>
           </View>
           <Switch
@@ -209,7 +211,7 @@ export const PermissionScreen = ({ navigation }) => {
           disabled={!areAllPermissionsGranted}
           activeOpacity={0.8}
         >
-          <Text style={styles.continueButtonText}>Continue</Text>
+          <Text style={styles.continueButtonText}>{t('continue', 'Continue')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

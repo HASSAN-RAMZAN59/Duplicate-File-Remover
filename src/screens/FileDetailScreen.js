@@ -21,6 +21,7 @@ import { formatBytes } from '../engine/hashEngine';
 import { deleteSelectedFiles } from '../engine/fileDeleter';
 import { VideoThumbnail } from '../components/VideoThumbnail';
 import { ROUTES } from '../navigation/routes';
+import { useTranslation } from '../context/LanguageContext';
 import BackArrowSvg from '../assets/back arrow.svg';
 import CopySvg from '../assets/preview/copy.svg';
 import OpenSvg from '../assets/preview/open.svg';
@@ -71,6 +72,7 @@ const getMimeType = (fileName = '', category = '') => {
 };
 
 export const FileDetailScreen = ({ route, navigation }) => {
+  const { t } = useTranslation();
   const { file = {} } = route.params || {};
   const [isDeleting, setIsDeleting] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
@@ -220,44 +222,27 @@ export const FileDetailScreen = ({ route, navigation }) => {
   // 4. Delete File Handler (Cross-Android version deletion + Navigation Back sync)
   const handleDeleteFile = () => {
     Alert.alert(
-      'Confirm Deletion',
+      t('deleteConfirmTitle', 'Confirm Deletion'),
       `Are you sure you want to delete this file permanently?\n\n${file.name || ''}`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel', 'Cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('deletePermanently', 'Delete Permanently'),
           style: 'destructive',
           onPress: async () => {
             setIsDeleting(true);
             try {
-              const result = await deleteSelectedFiles([{ path: file.path, size: file.size || 0 }]);
-              const success = result.success && result.deletedCount > 0;
+              const res = await deleteSelectedFiles([file]);
               setIsDeleting(false);
-
-              if (success) {
-                if (Platform.OS === 'android' && ToastAndroid) {
-                  ToastAndroid.show('File deleted successfully', ToastAndroid.SHORT);
-                }
-
-                // Automatically navigate BACK to previous screen and sync list state
-                if (navigation.canGoBack()) {
-                  navigation.navigate(ROUTES.DUPLICATE_VIEWER, {
-                    deletedFilePath: file.path,
-                    deletedFileId: file.id,
-                  });
-                } else {
-                  navigation.goBack();
-                }
+              if (res.deletedCount > 0) {
+                Alert.alert(t('cleanedSuccess', 'Cleaned Successfully 🎉'), 'File deleted successfully.');
+                navigation.goBack();
               } else {
-                Alert.alert(
-                  'Deletion Failed',
-                  'Could not delete the file from device storage. Please check storage permissions.'
-                );
+                Alert.alert(t('cleanupWarning', 'Deletion Failed'), 'Could not remove file.');
               }
             } catch (err) {
               setIsDeleting(false);
-              console.error('[FileDetail] Delete exception:', err);
-              Alert.alert('Error', 'An unexpected error occurred while deleting the file.');
+              Alert.alert(t('cleanupWarning', 'Error'), 'An error occurred while deleting.');
             }
           },
         },
@@ -267,7 +252,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header Bar */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -278,7 +263,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
           <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>File Detail</Text>
+        <Text style={styles.headerTitle}>{t('fileDetail', 'File Detail')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -312,7 +297,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
           >
             <CopySvg width={18} height={18} style={{ marginRight: 8 }} />
             <Text style={styles.copyButtonText}>
-              {copiedToast ? 'Location Copied!' : 'Copy File Location'}
+              {copiedToast ? t('locationCopied', 'Location Copied!') : t('copyFileLocation', 'Copy File Location')}
             </Text>
           </TouchableOpacity>
 
@@ -323,7 +308,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
               <View style={styles.actionCircleBtn}>
                 <OpenSvg width={24} height={24} />
               </View>
-              <Text style={styles.actionItemLabel}>Open File</Text>
+              <Text style={styles.actionItemLabel}>{t('openFile', 'Open File')}</Text>
             </TouchableOpacity>
 
             {/* Share */}
@@ -331,7 +316,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
               <View style={styles.actionCircleBtn}>
                 <ShareSvg width={24} height={24} />
               </View>
-              <Text style={styles.actionItemLabel}>Share</Text>
+              <Text style={styles.actionItemLabel}>{t('share', 'Share')}</Text>
             </TouchableOpacity>
 
             {/* Delete */}
@@ -344,7 +329,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
               <View style={styles.actionCircleBtn}>
                 <DeleteSvg width={24} height={24} />
               </View>
-              <Text style={styles.actionItemLabel}>Delete</Text>
+              <Text style={styles.actionItemLabel}>{t('delete', 'Delete')}</Text>
             </TouchableOpacity>
           </View>
         </View>

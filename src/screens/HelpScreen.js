@@ -9,8 +9,10 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/colors';
 import { ROUTES } from '../navigation/routes';
+import { useTranslation } from '../context/LanguageContext';
 
 export const HelpScreen = ({ navigation }) => {
+  const { t } = useTranslation();
   const faqs = [
     {
       q: 'How does Duplicate File Remover identify duplicates?',
@@ -38,7 +40,7 @@ export const HelpScreen = ({ navigation }) => {
         >
           <Text style={styles.backIconText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help & Support</Text>
+        <Text style={styles.headerTitle}>{t('helpSupport', 'Help & Support')}</Text>
         <View style={{ width: 44 }} />
       </View>
 

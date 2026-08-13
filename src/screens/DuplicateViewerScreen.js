@@ -24,6 +24,7 @@ import { calculateImageDuplicates } from '../engine/imageHashEngine';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
 import { deleteBatch } from '../engine/fileDeleter';
 import { VideoThumbnail } from '../components/VideoThumbnail';
+import { useTranslation } from '../context/LanguageContext';
 import BackArrowSvg from '../assets/back arrow.svg';
 import DelIconSvg from '../assets/del.svg';
 import GroupHeaderSvg from '../assets/scan resultgroup.svg';
@@ -31,6 +32,7 @@ import PinIconSvg from '../assets/pin.svg';
 import LottieView from 'lottie-react-native';
 
 export const DuplicateViewerScreen = ({ route, navigation }) => {
+  const { t } = useTranslation();
   const { categoryType = 'Images', initialGroups = null } = route.params || {};
 
   const [isLoading, setIsLoading] = useState(!Array.isArray(initialGroups));
@@ -227,11 +229,11 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                   Alert.alert('Contacts Merged 🎉', 'Contacts merged successfully');
                   performScan();
                 } else {
-                  Alert.alert('Merge Error', 'Could not merge selected contacts.');
+                  Alert.alert(t('cleanupWarning', 'Merge Error'), t('someFilesNotRemoved', 'Could not merge selected contacts.'));
                 }
               } catch (error) {
                 setIsDeleting(false);
-                Alert.alert('Error', 'An error occurred while merging contacts.');
+                Alert.alert(t('cleanupWarning', 'Error'), t('someFilesNotRemoved', 'An error occurred while merging contacts.'));
               }
             },
           },
@@ -239,12 +241,12 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       );
     } else {
       Alert.alert(
-        'Confirm Deletion',
-        `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})?`,
+        t('deleteConfirmTitle', 'Confirm Deletion'),
+        t('deleteConfirmBody', `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})?`).replace('{count}', selectionSummary.selectedCount).replace('{size}', selectionSummary.formattedBytes),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('cancel', 'Cancel'), style: 'cancel' },
           {
-            text: 'Delete Permanently',
+            text: t('deletePermanently', 'Delete Permanently'),
             style: 'destructive',
             onPress: async () => {
               setIsDeleting(true);
@@ -283,15 +285,15 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                   });
 
                   Alert.alert(
-                    'Cleaned Successfully ',
-                    `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`
+                    t('cleanedSuccess', 'Cleaned Successfully 🎉'),
+                    t('cleanedSuccessBody', `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted)
                   );
                 } else {
-                  Alert.alert('Deletion Error', 'Could not remove selected files from storage.');
+                  Alert.alert(t('cleanupWarning', 'Deletion Error'), t('someFilesNotRemoved', 'Could not remove selected files from storage.'));
                 }
               } catch (error) {
                 setIsDeleting(false);
-                Alert.alert('Error', 'An error occurred while deleting files.');
+                Alert.alert(t('cleanupWarning', 'Error'), t('someFilesNotRemoved', 'An error occurred while deleting files.'));
               }
             },
           },
@@ -299,6 +301,19 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       );
     }
   };
+
+  const getTranslatedCategoryName = (cat) => {
+    if (!cat) return '';
+    const norm = cat.toLowerCase();
+    if (norm.includes('image') || norm.includes('photo')) return t('similarPhotos', 'Photos');
+    if (norm.includes('video')) return t('duplicateVideos', 'Videos');
+    if (norm.includes('audio') || norm.includes('music')) return t('audioFiles', 'Audio');
+    if (norm.includes('doc')) return t('documents', 'Docs');
+    if (norm.includes('contact')) return t('contacts', 'Contacts');
+    return cat;
+  };
+
+  const displayCategoryName = getTranslatedCategoryName(categoryType);
 
   // 5. Render Group Card (Pic 1 & Pic 2 Layout)
   const renderGroupCard = ({ item: group, index: groupIndex }) => {
@@ -315,10 +330,10 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           <View style={styles.groupHeaderLeft}>
             <GroupHeaderSvg width={17} height={17} style={{ marginRight: 8 }} />
 
-            <Text style={styles.groupHeaderTitle}>Group {groupIndex + 1}</Text>
+            <Text style={styles.groupHeaderTitle}>{t('categories', 'Group')} {groupIndex + 1}</Text>
             <View style={styles.groupPillBadge}>
               <Text style={styles.groupPillText}>
-                {group.fileCount || group.files.length} files • {formattedGroupSize}
+                {group.fileCount || group.files.length} {t('files', 'files')} • {formattedGroupSize}
               </Text>
             </View>
           </View>
@@ -395,7 +410,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                 {isOriginal && (
                   <View style={styles.originalKeptBadge}>
                     <PinIconSvg width={7} height={12} style={{ marginRight: 4 }} />
-                    <Text style={styles.originalKeptText}>Original Kept</Text>
+                    <Text style={styles.originalKeptText}>{t('originalKept', 'Original Kept')}</Text>
                   </View>
                 )}
               </View>
@@ -425,7 +440,9 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
             <BackArrowSvg width={32} height={32} />
           </TouchableOpacity>
-          <Text style={styles.topTitleBarText}>Scanning {categoryType}</Text>
+          <Text style={styles.topTitleBarText}>
+            {t('scanningCategory', `Scanning ${displayCategoryName}`).replace('{category}', displayCategoryName)}
+          </Text>
           <View style={{ width: 32 }} />
         </View>
         <View style={styles.topTitleBarDivider} />
@@ -437,7 +454,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
             style={{ width: 220, height: 220 }}
           />
           <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginTop: 16 }}>
-            Scanning {categoryType}...
+            {t('scanningCategoryEllipsis', `Scanning ${displayCategoryName}...`).replace('{category}', displayCategoryName)}
           </Text>
         </View>
       </SafeAreaView>
@@ -453,7 +470,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
-        <Text style={styles.topTitleBarText}>Scan Details</Text>
+        <Text style={styles.topTitleBarText}>{t('scanDetails', 'Scan Details')}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -462,9 +479,9 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       {/* 2. Review Duplicates Header Section */}
       <View style={styles.reviewHeaderSection}>
         <View style={styles.reviewHeaderLeft}>
-          <Text style={styles.reviewMainTitle}>Review Duplicates</Text>
+          <Text style={styles.reviewMainTitle}>{t('reviewDuplicates', 'Review Duplicates')}</Text>
           <Text style={styles.reviewSubtitleLine}>
-            Select the files you want to remove. Keep at least one copy.
+            {t('reviewSubtitle', 'Select the files you want to remove. Keep at least one copy.')}
           </Text>
         </View>
 
@@ -476,7 +493,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           onPress={handleAutoSelect}
           activeOpacity={0.8}
         >
-          <Text style={styles.autoSelectPillText}>Auto Select</Text>
+          <Text style={styles.autoSelectPillText}>{t('autoSelect', 'Auto Select')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -484,9 +501,9 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
       {duplicateGroups.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🎉</Text>
-          <Text style={styles.emptyTitle}>No Duplicates Found</Text>
+          <Text style={styles.emptyTitle}>{t('noDuplicatesFound', 'No Duplicates Found')}</Text>
           <Text style={styles.emptySubtitle}>
-            Your {categoryType} storage is clean! No duplicate items were detected.
+            {t('storageCleanSub', `Your ${displayCategoryName} storage is clean! No duplicate items were detected.`).replace('{category}', displayCategoryName)}
           </Text>
         </View>
       ) : (
@@ -503,10 +520,10 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           <View style={styles.bottomBarContainer}>
             <View style={styles.bottomSummaryInfo}>
               <Text style={styles.bottomSelectedCountText}>
-                {selectionSummary.selectedCount} {isContacts ? 'contacts' : 'files'} selected
+                {selectionSummary.selectedCount} {isContacts ? t('contactsSelected', 'contacts selected') : t('itemsSelected', 'files selected')}
               </Text>
               <Text style={styles.bottomRecoverText}>
-                {isContacts ? 'Contact Merging' : `Recover ${selectionSummary.formattedBytes}`}
+                {isContacts ? t('contactMerging', 'Contact Merging') : t('recoverSpace', `Recover ${selectionSummary.formattedBytes}`).replace('{size}', selectionSummary.formattedBytes)}
               </Text>
             </View>
 
@@ -527,7 +544,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                     <DelIconSvg width={14} height={15} style={{ marginRight: 6 }} />
                   )}
                   <Text style={styles.deletePillButtonText}>
-                    {isContacts ? 'Merge Selected' : 'Delete Selected'}
+                    {isContacts ? t('mergeContacts', 'Merge Selected') : t('deleteSelected', 'Delete Selected')}
                   </Text>
                 </View>
               )}

@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { COLORS } from './src/constants/colors';
 import { loadSettings } from './src/services/settingsService';
+import { LanguageProvider } from './src/context/LanguageContext';
 
 export default function App() {
   useEffect(() => {
@@ -14,8 +15,10 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#1E1E1E" />
-        <AppNavigator />
+        <LanguageProvider>
+          <StatusBar barStyle="light-content" backgroundColor="#1E1E1E" />
+          <AppNavigator />
+        </LanguageProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
