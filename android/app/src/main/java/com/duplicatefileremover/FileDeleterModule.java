@@ -123,15 +123,74 @@ public class FileDeleterModule extends ReactContextBaseJavaModule {
             long docSize = 0;
             try {
                 Uri filesUri = MediaStore.Files.getContentUri("external");
-                String docSelection = MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'application/%' OR " + MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'text/%'";
+                String docSelection = MediaStore.Files.FileColumns.DATA + " LIKE '%.pdf' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.doc' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.docx' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.txt' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.xls' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.xlsx' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.ppt' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.pptx' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.csv' OR " +
+                        MediaStore.Files.FileColumns.DATA + " LIKE '%.rtf' OR " +
+                        MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'application/pdf%' OR " +
+                        MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'application/msword%' OR " +
+                        MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'application/vnd.%' OR " +
+                        MediaStore.Files.FileColumns.MIME_TYPE + " LIKE 'text/%'";
                 docSize = (long) getCategorySizeBySelection(resolver, filesUri, docSelection, null);
             } catch (Exception e) {}
+
+            // Fallback: If MediaStore returned 0 for docs, scan common document directories natively
+            if (docSize == 0) {
+                try {
+                    docSize = calculateDirectoryDocsSize();
+                } catch (Exception ignored) {}
+            }
             
             sizes.putDouble("docs", (double) docSize);
             promise.resolve(sizes);
         } catch (Exception e) {
             promise.reject("STORAGE_ERROR", e.getMessage());
         }
+    }
+
+    private long calculateDirectoryDocsSize() {
+        long totalBytes = 0;
+        String[] paths = new String[]{
+            "/storage/emulated/0/Documents",
+            "/storage/emulated/0/Download",
+            "/storage/emulated/0/WhatsApp/Media/WhatsApp Documents",
+            "/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents",
+            "/storage/emulated/0/Telegram/Telegram Documents"
+        };
+        for (String p : paths) {
+            File dir = new File(p);
+            if (dir.exists() && dir.isDirectory()) {
+                totalBytes += getDocFilesSizeInDir(dir, 0);
+            }
+        }
+        return totalBytes;
+    }
+
+    private long getDocFilesSizeInDir(File dir, int depth) {
+        if (depth > 5 || dir == null || !dir.isDirectory()) return 0;
+        long size = 0;
+        File[] files = dir.listFiles();
+        if (files == null) return 0;
+        for (File f : files) {
+            if (f.isFile()) {
+                String name = f.getName().toLowerCase();
+                if (name.endsWith(".pdf") || name.endsWith(".doc") || name.endsWith(".docx") ||
+                    name.endsWith(".txt") || name.endsWith(".xls") || name.endsWith(".xlsx") ||
+                    name.endsWith(".ppt") || name.endsWith(".pptx") || name.endsWith(".csv") ||
+                    name.endsWith(".rtf")) {
+                    size += f.length();
+                }
+            } else if (f.isDirectory() && !f.getName().startsWith(".")) {
+                size += getDocFilesSizeInDir(f, depth + 1);
+            }
+        }
+        return size;
     }
 
     private double getCategorySizeBySelection(ContentResolver resolver, Uri uri, String selection, String[] args) {
