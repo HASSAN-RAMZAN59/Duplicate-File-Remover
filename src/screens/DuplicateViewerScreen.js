@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   StatusBar,
+  BackHandler,
 } from 'react-native';
 import { ROUTES } from '../navigation/routes';
 import { scanCategoryFiles } from '../engine/fileScanner';
@@ -68,6 +69,28 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
   const hasScannedRef = useRef(false);
   const isContacts = categoryType.toUpperCase() === 'CONTACTS';
+
+  // Safe back navigation handler passing updated groups to DeepScanScreen
+  const handleGoBack = useCallback(() => {
+    navigation.navigate({
+      name: ROUTES.DEEP_SCAN,
+      params: {
+        updatedCategoryName: categoryType,
+        updatedGroups: duplicateGroups,
+      },
+      merge: true,
+    });
+  }, [navigation, categoryType, duplicateGroups]);
+
+  // Handle hardware back press on Android
+  useEffect(() => {
+    const onBackPress = () => {
+      handleGoBack();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [handleGoBack]);
 
   // 1. Perform Real-Time Scanning Engine
   const performScan = useCallback(async () => {
@@ -529,7 +552,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
       {/* 1. Top Title Bar with 'Scan Details' */}
       <View style={styles.topTitleBarContainer}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.7}>
           <BackArrowSvg width={32} height={32} />
         </TouchableOpacity>
         <Text style={styles.topTitleBarText}>{t('scanDetails', 'Scan Details')}</Text>

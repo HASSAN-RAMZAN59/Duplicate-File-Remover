@@ -17,6 +17,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { ROUTES } from '../navigation/routes';
 import { runDeepScan } from '../engine/deepScanEngine';
 import { deleteBatch } from '../engine/fileDeleter';
+import { formatBytes } from '../engine/hashEngine';
 import { useTranslation } from '../context/LanguageContext';
 import { CustomDialog } from '../components/CustomDialog';
 import BackArrowSvg from '../assets/back arrow.svg';
@@ -298,6 +299,80 @@ export const DeepScanScreen = ({ navigation, route }) => {
       isCancelledRef.current = true;
     };
   }, []);
+
+  // Real-time dynamic sync when returning from DuplicateViewerScreen with updated category data
+  useEffect(() => {
+    const updatedCategoryName = route?.params?.updatedCategoryName;
+    const updatedGroups = route?.params?.updatedGroups;
+
+    if (updatedCategoryName && scanResults && scanResults.categoryResults) {
+      const normCatName = updatedCategoryName.toLowerCase();
+      const catKey = Object.keys(scanResults.categoryResults).find(
+        (key) =>
+          scanResults.categoryResults[key].name.toLowerCase() === normCatName ||
+          key.toLowerCase() === normCatName
+      );
+
+      if (catKey) {
+        let newCatDupesCount = 0;
+        let newCatBytes = 0;
+        const newCatGroups = updatedGroups || [];
+
+        for (const group of newCatGroups) {
+          if (!group.files || group.files.length <= 1) continue;
+          for (const file of group.files) {
+            if (!file.isOriginal) {
+              newCatDupesCount += 1;
+              newCatBytes += Number(file.size || 0);
+            }
+          }
+        }
+
+        const updatedCatResults = {
+          ...scanResults.categoryResults,
+          [catKey]: {
+            ...scanResults.categoryResults[catKey],
+            duplicateCount: newCatDupesCount,
+            reclaimableBytes: newCatBytes,
+            reclaimableFormatted: formatBytes(newCatBytes),
+            groups: newCatGroups,
+          },
+        };
+
+        let newTotalCount = 0;
+        let newTotalBytes = 0;
+        const allPreselectedFiles = [];
+        const allDuplicateGroups = [];
+
+        Object.values(updatedCatResults).forEach((catRes) => {
+          newTotalCount += catRes.duplicateCount || 0;
+          newTotalBytes += catRes.reclaimableBytes || 0;
+          (catRes.groups || []).forEach((g) => {
+            if (g.files && g.files.length > 1) {
+              allDuplicateGroups.push(g);
+              (g.files || []).forEach((f) => {
+                if (!f.isOriginal) {
+                  allPreselectedFiles.push(f);
+                }
+              });
+            }
+          });
+        });
+
+        setScanResults({
+          ...scanResults,
+          totalDuplicateCount: newTotalCount,
+          totalReclaimableBytes: newTotalBytes,
+          totalReclaimableFormatted: formatBytes(newTotalBytes),
+          categoryResults: updatedCatResults,
+          allDuplicateGroups,
+          allPreselectedFiles,
+        });
+
+        navigation.setParams({ updatedCategoryName: undefined, updatedGroups: undefined });
+      }
+    }
+  }, [route?.params?.updatedCategoryName, route?.params?.updatedGroups]);
 
   // Clean All Handler
   const handleCleanAll = () => {
