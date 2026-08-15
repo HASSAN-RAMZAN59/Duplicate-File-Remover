@@ -18,6 +18,7 @@ import { ROUTES } from '../navigation/routes';
 import { runDeepScan } from '../engine/deepScanEngine';
 import { deleteBatch } from '../engine/fileDeleter';
 import { useTranslation } from '../context/LanguageContext';
+import { CustomDialog } from '../components/CustomDialog';
 import BackArrowSvg from '../assets/back arrow.svg';
 import ImagesCategorySvg from '../assets/full scan/Overlay.svg';
 import VideosCategorySvg from '../assets/full scan/video.svg';
@@ -201,6 +202,19 @@ export const DeepScanScreen = ({ navigation, route }) => {
   const [currentCategory, setCurrentCategory] = useState('');
   const [scanResults, setScanResults] = useState(null);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [dialogConfig, setDialogConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    iconType: 'none',
+    primaryButtonText: 'OK',
+    primaryButtonColor: '#306FFF',
+    onPrimaryPress: null,
+    secondaryButtonText: null,
+    onSecondaryPress: null,
+  });
+
+  const hideDialog = () => setDialogConfig((prev) => ({ ...prev, visible: false }));
 
   const selectedCategoryIds = route?.params?.selectedCategoryIds;
   const isCancelledRef = useRef(false);
@@ -288,43 +302,61 @@ export const DeepScanScreen = ({ navigation, route }) => {
   // Clean All Handler
   const handleCleanAll = () => {
     if (!scanResults || !scanResults.allPreselectedFiles || scanResults.allPreselectedFiles.length === 0) {
-      Alert.alert(t('noDuplicates', 'No Duplicates'), t('noDuplicatesSelected', 'There are no duplicates selected to clean.'));
+      setDialogConfig({
+        visible: true,
+        title: t('noDuplicates', 'No Duplicates'),
+        message: t('noDuplicatesSelected', 'There are no duplicates selected to clean.'),
+        iconType: 'warning',
+        primaryButtonText: 'OK',
+        primaryButtonColor: '#306FFF',
+        onPrimaryPress: hideDialog,
+      });
       return;
     }
 
     const fileCount = scanResults.allPreselectedFiles.length;
     const formattedSize = scanResults.totalReclaimableFormatted;
 
-    Alert.alert(
-      t('cleanAllTitle', 'Clean All Duplicates'),
-      t('cleanAllBody', `Are you sure you want to permanently delete all ${fileCount} duplicate items and free up ${formattedSize} of storage?`).replace('{count}', fileCount).replace('{size}', formattedSize),
-      [
-        { text: t('cancel', 'Cancel'), style: 'cancel' },
-        {
-          text: t('cleanAllNow', 'Clean All Now'),
-          style: 'destructive',
-          onPress: async () => {
-            setIsCleaning(true);
+    setDialogConfig({
+      visible: true,
+      title: t('cleanAllTitle', 'Clean All Duplicates'),
+      message: t('cleanAllBody', `Are you sure you want to permanently delete all ${fileCount} duplicate items and free up ${formattedSize} of storage?`).replace('{count}', fileCount).replace('{size}', formattedSize),
+      primaryButtonText: t('cleanAllNow', 'Clean All Now'),
+      primaryButtonColor: '#FFFFFF',
+      secondaryButtonText: t('cancel', 'Cancel'),
+      onSecondaryPress: hideDialog,
+      onPrimaryPress: async () => {
+        hideDialog();
+        setIsCleaning(true);
 
-            try {
-              const res = await deleteBatch(scanResults.allPreselectedFiles);
+        try {
+          const res = await deleteBatch(scanResults.allPreselectedFiles);
 
-              Alert.alert(
-                t('cleanSuccessTitle', 'Deep Clean Successful'),
-                t('cleanSuccessBody', `Removed ${res.deletedCount} duplicate items and freed ${res.freedFormatted} of storage!`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted)
-              );
+          setDialogConfig({
+            visible: true,
+            title: t('cleanSuccessTitle', 'Deep Clean Successful'),
+            message: t('cleanSuccessBody', `Removed ${res.deletedCount} duplicate items and freed ${res.freedFormatted} of storage!`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted),
+            primaryButtonText: 'OK',
+            primaryButtonColor: '#FFFFFF',
+            onPrimaryPress: hideDialog,
+          });
 
-              // Re-run scan to refresh state
-              handleStartDeepScan();
-            } catch (err) {
-              Alert.alert(t('cleanupWarning', 'Cleanup Warning'), t('someFilesNotRemoved', 'Some files could not be removed.'));
-            } finally {
-              setIsCleaning(false);
-            }
-          },
-        },
-      ]
-    );
+          // Re-run scan to refresh state
+          handleStartDeepScan();
+        } catch (err) {
+          setDialogConfig({
+            visible: true,
+            title: t('cleanupWarning', 'Cleanup Warning'),
+            message: t('someFilesNotRemoved', 'Some files could not be removed.'),
+            primaryButtonText: 'OK',
+            primaryButtonColor: '#FFFFFF',
+            onPrimaryPress: hideDialog,
+          });
+        } finally {
+          setIsCleaning(false);
+        }
+      },
+    });
   };
 
   const categoryList = scanResults && scanResults.categoryResults
@@ -455,6 +487,8 @@ export const DeepScanScreen = ({ navigation, route }) => {
           </>
         )}
       </ScrollView>
+
+      <CustomDialog {...dialogConfig} onClose={hideDialog} />
     </SafeAreaView>
   );
 };

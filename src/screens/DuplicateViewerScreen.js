@@ -23,6 +23,7 @@ import { scanImageFiles } from '../engine/imageScanner';
 import { calculateImageDuplicates } from '../engine/imageHashEngine';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
 import { deleteBatch } from '../engine/fileDeleter';
+import { CustomDialog } from '../components/CustomDialog';
 import { VideoThumbnail } from '../components/VideoThumbnail';
 import { useTranslation } from '../context/LanguageContext';
 import BackArrowSvg from '../assets/back arrow.svg';
@@ -51,6 +52,19 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   });
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAutoSelected, setIsAutoSelected] = useState(true);
+  const [dialogConfig, setDialogConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    iconType: 'none',
+    primaryButtonText: 'OK',
+    primaryButtonColor: '#306FFF',
+    onPrimaryPress: null,
+    secondaryButtonText: null,
+    onSecondaryPress: null,
+  });
+
+  const hideDialog = () => setDialogConfig((prev) => ({ ...prev, visible: false }));
 
   const hasScannedRef = useRef(false);
   const isContacts = categoryType.toUpperCase() === 'CONTACTS';
@@ -203,103 +217,150 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   // 4. Primary Action Handler (Merge Contacts / Delete Selected Files)
   const handlePrimaryAction = () => {
     if (selectionSummary.selectedCount === 0) {
-      Alert.alert(
-        'No Selection',
-        isContacts
+      setDialogConfig({
+        visible: true,
+        title: 'No Selection',
+        message: isContacts
           ? 'Please select at least one duplicate contact to merge.'
-          : 'Please select at least one duplicate file to delete.'
-      );
+          : 'Please select at least one duplicate file to delete.',
+        iconType: 'warning',
+        primaryButtonText: 'OK',
+        primaryButtonColor: '#306FFF',
+        onPrimaryPress: hideDialog,
+      });
       return;
     }
 
     if (isContacts) {
-      Alert.alert(
-        'Confirm Contact Merge',
-        'Selected duplicate contacts will be merged into 1 unified contact card.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Merge Contacts',
-            onPress: async () => {
-              setIsDeleting(true);
-              try {
-                const res = await mergeSelectedContactGroups(duplicateGroups);
-                setIsDeleting(false);
+      setDialogConfig({
+        visible: true,
+        title: 'Confirm Contact Merge',
+        message: 'Selected duplicate contacts will be merged into 1 unified contact card.',
+        iconType: 'warning',
+        primaryButtonText: 'Merge Contacts',
+        primaryButtonColor: '#306FFF',
+        secondaryButtonText: t('cancel', 'Cancel'),
+        onSecondaryPress: hideDialog,
+        onPrimaryPress: async () => {
+          hideDialog();
+          setIsDeleting(true);
+          try {
+            const res = await mergeSelectedContactGroups(duplicateGroups);
+            setIsDeleting(false);
 
-                if (res.success || res.totalMerged > 0) {
-                  Alert.alert('Contacts Merged', 'Contacts merged successfully');
-                  performScan();
-                } else {
-                  Alert.alert(t('cleanupWarning', 'Merge Error'), t('someFilesNotRemoved', 'Could not merge selected contacts.'));
-                }
-              } catch (error) {
-                setIsDeleting(false);
-                Alert.alert(t('cleanupWarning', 'Error'), t('someFilesNotRemoved', 'An error occurred while merging contacts.'));
-              }
-            },
-          },
-        ]
-      );
+            if (res.success || res.totalMerged > 0) {
+              setDialogConfig({
+                visible: true,
+                title: 'Contacts Merged',
+                message: 'Contacts merged successfully.',
+                iconType: 'success',
+                primaryButtonText: 'OK',
+                primaryButtonColor: '#306FFF',
+                onPrimaryPress: hideDialog,
+              });
+              performScan();
+            } else {
+              setDialogConfig({
+                visible: true,
+                title: t('cleanupWarning', 'Merge Error'),
+                message: t('someFilesNotRemoved', 'Could not merge selected contacts.'),
+                iconType: 'warning',
+                primaryButtonText: 'OK',
+                primaryButtonColor: '#306FFF',
+                onPrimaryPress: hideDialog,
+              });
+            }
+          } catch (error) {
+            setIsDeleting(false);
+            setDialogConfig({
+              visible: true,
+              title: t('cleanupWarning', 'Error'),
+              message: t('someFilesNotRemoved', 'An error occurred while merging contacts.'),
+              iconType: 'warning',
+              primaryButtonText: 'OK',
+              primaryButtonColor: '#306FFF',
+              onPrimaryPress: hideDialog,
+            });
+          }
+        },
+      });
     } else {
-      Alert.alert(
-        t('deleteConfirmTitle', 'Confirm Deletion'),
-        t('deleteConfirmBody', `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})?`).replace('{count}', selectionSummary.selectedCount).replace('{size}', selectionSummary.formattedBytes),
-        [
-          { text: t('cancel', 'Cancel'), style: 'cancel' },
-          {
-            text: t('deletePermanently', 'Delete Permanently'),
-            style: 'destructive',
-            onPress: async () => {
-              setIsDeleting(true);
-              const selectedItems = [];
+      setDialogConfig({
+        visible: true,
+        title: t('deleteConfirmTitle', 'Confirm Deletion'),
+        message: t('deleteConfirmBody', `Are you sure you want to delete ${selectionSummary.selectedCount} item(s) (${selectionSummary.formattedBytes})?`).replace('{count}', selectionSummary.selectedCount).replace('{size}', selectionSummary.formattedBytes),
+        primaryButtonText: t('deletePermanently', 'Delete Permanently'),
+        primaryButtonColor: '#FFFFFF',
+        secondaryButtonText: t('cancel', 'Cancel'),
+        onSecondaryPress: hideDialog,
+        onPrimaryPress: async () => {
+          hideDialog();
+          setIsDeleting(true);
+          const selectedItems = [];
 
-              duplicateGroups.forEach((group) => {
-                group.files.forEach((file) => {
-                  if (file.selected) {
-                    selectedItems.push(file);
-                  }
-                });
+          duplicateGroups.forEach((group) => {
+            group.files.forEach((file) => {
+              if (file.selected) {
+                selectedItems.push(file);
+              }
+            });
+          });
+
+          try {
+            const res = await deleteBatch(selectedItems);
+            setIsDeleting(false);
+
+            if (res.deletedCount > 0) {
+              const deletedPathsSet = new Set(selectedItems.map((item) => item.path));
+
+              setDuplicateGroups((prevGroups) => {
+                const updatedGroups = prevGroups
+                  .map((group) => {
+                    const remainingFiles = group.files.filter(
+                      (file) => !deletedPathsSet.has(file.path)
+                    );
+                    return {
+                      ...group,
+                      files: remainingFiles,
+                      fileCount: remainingFiles.length,
+                    };
+                  })
+                  .filter((group) => group.files.length > 1);
+
+                return updatedGroups;
               });
 
-              try {
-                const res = await deleteBatch(selectedItems);
-                setIsDeleting(false);
-
-                if (res.deletedCount > 0) {
-                  const deletedPathsSet = new Set(selectedItems.map((item) => item.path));
-
-                  setDuplicateGroups((prevGroups) => {
-                    const updatedGroups = prevGroups
-                      .map((group) => {
-                        const remainingFiles = group.files.filter(
-                          (file) => !deletedPathsSet.has(file.path)
-                        );
-                        return {
-                          ...group,
-                          files: remainingFiles,
-                          fileCount: remainingFiles.length,
-                        };
-                      })
-                      .filter((group) => group.files.length > 1);
-
-                    return updatedGroups;
-                  });
-
-                  Alert.alert(
-                    t('cleanedSuccess', 'Cleaned Successfully'),
-                    t('cleanedSuccessBody', `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted)
-                  );
-                } else {
-                  Alert.alert(t('cleanupWarning', 'Deletion Error'), t('someFilesNotRemoved', 'Could not remove selected files from storage.'));
-                }
-              } catch (error) {
-                setIsDeleting(false);
-                Alert.alert(t('cleanupWarning', 'Error'), t('someFilesNotRemoved', 'An error occurred while deleting files.'));
-              }
-            },
-          },
-        ]
-      );
+              setDialogConfig({
+                visible: true,
+                title: t('cleanedSuccess', 'Cleaned Successfully'),
+                message: t('cleanedSuccessBody', `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted),
+                primaryButtonText: 'OK',
+                primaryButtonColor: '#FFFFFF',
+                onPrimaryPress: hideDialog,
+              });
+            } else {
+              setDialogConfig({
+                visible: true,
+                title: t('cleanupWarning', 'Deletion Error'),
+                message: t('someFilesNotRemoved', 'Could not remove selected files from storage.'),
+                primaryButtonText: 'OK',
+                primaryButtonColor: '#FFFFFF',
+                onPrimaryPress: hideDialog,
+              });
+            }
+          } catch (error) {
+            setIsDeleting(false);
+            setDialogConfig({
+              visible: true,
+              title: t('cleanupWarning', 'Error'),
+              message: t('someFilesNotRemoved', 'An error occurred while deleting files.'),
+              primaryButtonText: 'OK',
+              primaryButtonColor: '#FFFFFF',
+              onPrimaryPress: hideDialog,
+            });
+          }
+        },
+      });
     }
   };
 
@@ -552,6 +613,8 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
           </View>
         </View>
       )}
+
+      <CustomDialog {...dialogConfig} onClose={hideDialog} />
     </SafeAreaView>
   );
 };

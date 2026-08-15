@@ -19,6 +19,7 @@ import FileViewer from 'react-native-file-viewer';
 import RNShare from 'react-native-share';
 import { formatBytes } from '../engine/hashEngine';
 import { deleteSelectedFiles } from '../engine/fileDeleter';
+import { CustomDialog } from '../components/CustomDialog';
 import { VideoThumbnail } from '../components/VideoThumbnail';
 import { ROUTES } from '../navigation/routes';
 import { useTranslation } from '../context/LanguageContext';
@@ -76,6 +77,19 @@ export const FileDetailScreen = ({ route, navigation }) => {
   const { file = {} } = route.params || {};
   const [isDeleting, setIsDeleting] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
+  const [dialogConfig, setDialogConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    iconType: 'none',
+    primaryButtonText: 'OK',
+    primaryButtonColor: '#306FFF',
+    onPrimaryPress: null,
+    secondaryButtonText: null,
+    onSecondaryPress: null,
+  });
+
+  const hideDialog = () => setDialogConfig((prev) => ({ ...prev, visible: false }));
 
   const fileUri =
     file.path && (file.path.startsWith('file://') || file.path.startsWith('content://'))
@@ -221,33 +235,55 @@ export const FileDetailScreen = ({ route, navigation }) => {
 
   // 4. Delete File Handler (Cross-Android version deletion + Navigation Back sync)
   const handleDeleteFile = () => {
-    Alert.alert(
-      t('deleteConfirmTitle', 'Confirm Deletion'),
-      `Are you sure you want to delete this file permanently?\n\n${file.name || ''}`,
-      [
-        { text: t('cancel', 'Cancel'), style: 'cancel' },
-        {
-          text: t('deletePermanently', 'Delete Permanently'),
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeleting(true);
-            try {
-              const res = await deleteSelectedFiles([file]);
-              setIsDeleting(false);
-              if (res.deletedCount > 0) {
-                Alert.alert(t('cleanedSuccess', 'Cleaned Successfully'), 'File deleted successfully.');
+    setDialogConfig({
+      visible: true,
+      title: t('deleteConfirmTitle', 'Confirm Deletion'),
+      message: `Are you sure you want to delete this file permanently?\n\n${file.name || ''}`,
+      primaryButtonText: t('deletePermanently', 'Delete Permanently'),
+      primaryButtonColor: '#FFFFFF',
+      secondaryButtonText: t('cancel', 'Cancel'),
+      onSecondaryPress: hideDialog,
+      onPrimaryPress: async () => {
+        hideDialog();
+        setIsDeleting(true);
+        try {
+          const res = await deleteSelectedFiles([file]);
+          setIsDeleting(false);
+          if (res.deletedCount > 0) {
+            setDialogConfig({
+              visible: true,
+              title: t('cleanedSuccess', 'Cleaned Successfully'),
+              message: 'File deleted successfully.',
+              primaryButtonText: 'OK',
+              primaryButtonColor: '#FFFFFF',
+              onPrimaryPress: () => {
+                hideDialog();
                 navigation.goBack();
-              } else {
-                Alert.alert(t('cleanupWarning', 'Deletion Failed'), 'Could not remove file.');
-              }
-            } catch (err) {
-              setIsDeleting(false);
-              Alert.alert(t('cleanupWarning', 'Error'), 'An error occurred while deleting.');
-            }
-          },
-        },
-      ]
-    );
+              },
+            });
+          } else {
+            setDialogConfig({
+              visible: true,
+              title: t('cleanupWarning', 'Deletion Failed'),
+              message: 'Could not remove file.',
+              primaryButtonText: 'OK',
+              primaryButtonColor: '#FFFFFF',
+              onPrimaryPress: hideDialog,
+            });
+          }
+        } catch (err) {
+          setIsDeleting(false);
+          setDialogConfig({
+            visible: true,
+            title: t('cleanupWarning', 'Error'),
+            message: 'An error occurred while deleting.',
+            primaryButtonText: 'OK',
+            primaryButtonColor: '#FFFFFF',
+            onPrimaryPress: hideDialog,
+          });
+        }
+      },
+    });
   };
 
   return (
@@ -268,51 +304,60 @@ export const FileDetailScreen = ({ route, navigation }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Main Card */}
+        {/* Detail Card */}
         <View style={styles.detailCard}>
-          {/* Top Square Thumbnail Preview */}
           <View style={styles.previewBox}>
             {isImageFile ? (
               <Image source={{ uri: fileUri }} style={styles.previewImage} resizeMode="cover" />
-            ) : isVideoFile && file.path ? (
-              <VideoThumbnail filePath={file.path} style={styles.previewImage} resizeMode="cover" />
+            ) : isVideoFile ? (
+              <VideoThumbnail path={file.path} style={styles.previewImage} resizeMode="cover" />
             ) : (
-              <Text style={styles.fallbackText}>File</Text>
+              <Text style={styles.previewIconText}>📄</Text>
             )}
           </View>
 
-          {/* File Size */}
-          <Text style={styles.fileSizeText}>{formatBytes(file.size)}</Text>
-
-          {/* File Path */}
-          <Text style={styles.filePathText} numberOfLines={3} ellipsisMode="tail">
-            {file.path || '/storage/emulated/0/'}
+          <Text style={styles.fileName} numberOfLines={2}>
+            {file.name || 'Unknown File'}
+          </Text>
+          <Text style={styles.fileSize}>{formatBytes(file.size || 0)}</Text>
+          <Text style={styles.filePath} numberOfLines={3}>
+            {file.path || ''}
           </Text>
 
-          {/* Copy File Location Pill Button */}
-          <TouchableOpacity
-            style={styles.copyButton}
-            onPress={handleCopyLocation}
-            activeOpacity={0.7}
-          >
-            <CopySvg width={18} height={18} style={{ marginRight: 8 }} />
-            <Text style={styles.copyButtonText}>
-              {copiedToast ? t('locationCopied', 'Location Copied!') : t('copyFileLocation', 'Copy File Location')}
-            </Text>
-          </TouchableOpacity>
+          {/* Action Row */}
+          <View style={styles.actionRow}>
+            {/* Copy Location */}
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={handleCopyLocation}
+              activeOpacity={0.8}
+            >
+              <View style={styles.actionCircleBtn}>
+                <CopySvg width={24} height={24} />
+              </View>
+              <Text style={styles.actionItemLabel}>
+                {copiedToast ? t('locationCopied', 'Copied!') : t('copyFileLocation', 'Copy Path')}
+              </Text>
+            </TouchableOpacity>
 
-          {/* Action Buttons Row */}
-          <View style={styles.actionButtonsRow}>
-            {/* Open File */}
-            <TouchableOpacity style={styles.actionItem} onPress={handleOpenFile} activeOpacity={0.8}>
+            {/* Open */}
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={handleOpenFile}
+              activeOpacity={0.8}
+            >
               <View style={styles.actionCircleBtn}>
                 <OpenSvg width={24} height={24} />
               </View>
-              <Text style={styles.actionItemLabel}>{t('openFile', 'Open File')}</Text>
+              <Text style={styles.actionItemLabel}>{t('openFile', 'Open')}</Text>
             </TouchableOpacity>
 
             {/* Share */}
-            <TouchableOpacity style={styles.actionItem} onPress={handleShareFile} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={handleShareFile}
+              activeOpacity={0.8}
+            >
               <View style={styles.actionCircleBtn}>
                 <ShareSvg width={24} height={24} />
               </View>
@@ -334,6 +379,8 @@ export const FileDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      <CustomDialog {...dialogConfig} onClose={hideDialog} />
     </SafeAreaView>
   );
 };
