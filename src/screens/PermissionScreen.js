@@ -156,7 +156,7 @@ export const PermissionScreen = ({ navigation }) => {
             <View style={styles.labelContainer}>
               <Text style={styles.cardTitle}>{t('contacts', 'Contacts')}</Text>
               <Text style={styles.cardSubtitle}>
-                {t('contactsSubtitle', 'Required to scan and remove duplicate files from your device.')}
+                {t('contactsSubtitle', 'Required to scan and remove duplicate contacts on device.')}
               </Text>
             </View>
             <Switch
@@ -179,7 +179,7 @@ export const PermissionScreen = ({ navigation }) => {
             <View style={styles.labelContainer}>
               <Text style={styles.cardTitle}>{t('musicAudio', 'Music & Audio')}</Text>
               <Text style={styles.cardSubtitle}>
-                {t('musicSubtitle', 'Required to identify duplicate images and videos in your media library.')}
+                {t('musicSubtitle', 'Required to scan and remove duplicate audio files.')}
               </Text>
             </View>
             <Switch
@@ -202,7 +202,7 @@ export const PermissionScreen = ({ navigation }) => {
             <View style={styles.labelContainer}>
               <Text style={styles.cardTitle}>{t('photosVideos', 'Photos & Videos')}</Text>
               <Text style={styles.cardSubtitle}>
-                {t('photosSubtitle', 'Stay updated on scan results and scheduled cleanup reminders.')}
+                {t('photosSubtitle', 'Required to scan and remove duplicate photos & videos.')}
               </Text>
             </View>
             <Switch
@@ -225,7 +225,7 @@ export const PermissionScreen = ({ navigation }) => {
             <View style={styles.labelContainer}>
               <Text style={styles.cardTitle}>{t('allFilesAccess', 'All Files Access')}</Text>
               <Text style={styles.cardSubtitle}>
-                {t('allFilesSubtitle', 'Required for Full Device Scan and Deep Duplicate File Cleaning.')}
+                {t('allFilesSubtitle', 'Required to scan and remove all duplicate files on device.')}
               </Text>
             </View>
             <Switch
@@ -305,9 +305,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#2A2A2E',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    minHeight: 74,
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    minHeight: 94,
     marginBottom: 10,
   },
   iconWrapper: {
