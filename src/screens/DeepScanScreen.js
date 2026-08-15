@@ -277,7 +277,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
           else if (soloId === 'docs') categoryType = 'Documents';
         }
 
-        navigation.replace(ROUTES.DUPLICATE_VIEWER, { categoryType, initialGroups });
+        navigation.replace(ROUTES.DUPLICATE_VIEWER, { categoryType, initialGroups, isSingleCategoryScan: true });
         return;
       }
     } catch (error) {

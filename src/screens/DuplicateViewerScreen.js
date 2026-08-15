@@ -36,7 +36,7 @@ import LottieView from 'lottie-react-native';
 
 export const DuplicateViewerScreen = ({ route, navigation }) => {
   const { t } = useTranslation();
-  const { categoryType = 'Images', initialGroups = null } = route.params || {};
+  const { categoryType = 'Images', initialGroups = null, isSingleCategoryScan = false } = route.params || {};
 
   const [isLoading, setIsLoading] = useState(!Array.isArray(initialGroups));
   const [duplicateGroups, setDuplicateGroups] = useState(() => {
@@ -70,17 +70,21 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   const hasScannedRef = useRef(false);
   const isContacts = categoryType.toUpperCase() === 'CONTACTS';
 
-  // Safe back navigation handler passing updated groups to DeepScanScreen
+  // Safe back navigation handler passing updated groups to DeepScanScreen or returning to Home if single scan
   const handleGoBack = useCallback(() => {
-    navigation.navigate({
-      name: ROUTES.DEEP_SCAN,
-      params: {
-        updatedCategoryName: categoryType,
-        updatedGroups: duplicateGroups,
-      },
-      merge: true,
-    });
-  }, [navigation, categoryType, duplicateGroups]);
+    if (isSingleCategoryScan) {
+      navigation.navigate(ROUTES.HOME);
+    } else {
+      navigation.navigate({
+        name: ROUTES.DEEP_SCAN,
+        params: {
+          updatedCategoryName: categoryType,
+          updatedGroups: duplicateGroups,
+        },
+        merge: true,
+      });
+    }
+  }, [navigation, categoryType, duplicateGroups, isSingleCategoryScan]);
 
   // Handle hardware back press on Android
   useEffect(() => {
