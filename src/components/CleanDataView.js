@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   StatusBar,
+  NativeModules,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import RNFS from 'react-native-fs';
@@ -23,6 +24,14 @@ export const CleanDataView = ({ cleanedSize = '0 B', onGoBack }) => {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Trigger completion "ting" chime sound natively
+    try {
+      if (NativeModules.NativeFileDeleter && typeof NativeModules.NativeFileDeleter.playCompletionSound === 'function') {
+        NativeModules.NativeFileDeleter.playCompletionSound();
+      }
+    } catch (e) {}
+
     const fetchAvailableSpace = async () => {
       try {
         const fsInfo = await RNFS.getFSInfo();
