@@ -92,7 +92,7 @@ export const HomeScreen = ({ navigation }) => {
           docs: sizes.docs ? formatBytes(sizes.docs) : '0 B',
         });
       } else {
-         setCategoryStats({ photos: '0 B', videos: '0 B', audio: '0 B', docs: '0 B' });
+        setCategoryStats({ photos: '0 B', videos: '0 B', audio: '0 B', docs: '0 B' });
       }
     } catch (error) {
       console.warn('Error fetching storage stats:', error);
@@ -143,18 +143,18 @@ export const HomeScreen = ({ navigation }) => {
         <View style={styles.progressContainer}>
           <Svg width={140} height={140} viewBox="0 0 100 100">
             <Circle cx="50" cy="50" r="45" stroke="#2A2A2E" strokeWidth="6" fill="transparent" />
-            <AnimatedCircle 
-              cx="50" 
-              cy="50" 
-              r="45" 
-              stroke="#FFFFFF" 
-              strokeWidth="6" 
-              fill="transparent" 
-              strokeDasharray={circumference} 
-              strokeDashoffset={strokeDashoffset} 
-              strokeLinecap="round" 
-              rotation="-90" 
-              origin="50, 50" 
+            <AnimatedCircle
+              cx="50"
+              cy="50"
+              r="45"
+              stroke="#FFFFFF"
+              strokeWidth="6"
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              rotation="-90"
+              origin="50, 50"
             />
           </Svg>
           <View style={styles.progressTextContainer}>
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   progressPercentage: {
     fontSize: 28,
-    
+
     color: '#FFFFFF',
   },
   progressLabel: {

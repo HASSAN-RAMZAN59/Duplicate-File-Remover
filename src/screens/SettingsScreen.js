@@ -20,19 +20,15 @@ import { useTranslation } from '../context/LanguageContext';
 import BackArrowSvg from '../assets/back arrow.svg';
 import LanguageSvg from '../assets/language.svg';
 import IgnoreSvg from '../assets/ignore.svg';
-import AutomaticSvg from '../assets/automatic.svg';
 import RateUsSvg from '../assets/rate us.svg';
 import PrivacySvg from '../assets/privacy .svg';
 import VersionSvg from '../assets/version.svg';
 import ExternalLinkSvg from '../assets/version 2.svg';
 
-const AUTO_SCAN_OPTIONS = ['Off', 'Daily', 'Weekly', 'Monthly'];
-
 export const SettingsScreen = ({ navigation }) => {
   const { t, language } = useTranslation();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isAutoScanModalVisible, setIsAutoScanModalVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
@@ -106,11 +102,6 @@ export const SettingsScreen = ({ navigation }) => {
     showThemedToast(t('settingUpdated', 'Setting updated successfully'));
   };
 
-  const handleSelectAutoScan = async (option) => {
-    await handleToggle('automaticScanning', option);
-    setIsAutoScanModalVisible(false);
-  };
-
   const handleRateUs = () => {
     showThemedToast(t('thankYouSupport', 'Thank you for supporting us!'));
   };
@@ -176,26 +167,6 @@ export const SettingsScreen = ({ navigation }) => {
               disabled={!isLoaded}
             />
           </View>
-
-          <View style={styles.divider} />
-
-          {/* Automatic Scanning */}
-          <TouchableOpacity
-            style={styles.row}
-            activeOpacity={0.7}
-            onPress={() => setIsAutoScanModalVisible(true)}
-          >
-            <View style={styles.iconContainer}>
-              <AutomaticSvg width={20} height={20} />
-            </View>
-            <View style={styles.labelContainer}>
-              <Text style={styles.rowTitle}>{t('automaticScanning', 'Automatic Scanning')}</Text>
-            </View>
-            <View style={styles.valueGroup}>
-              <Text style={styles.valueText}>{getOptionLabel(settings.automaticScanning || 'Weekly')}</Text>
-              <Text style={styles.chevron}>›</Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* SECTION 3: SUPPORT & ABOUT */}
@@ -243,42 +214,6 @@ export const SettingsScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
-
-      {/* Automatic Scanning Frequency Selection Modal */}
-      <Modal
-        visible={isAutoScanModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsAutoScanModalVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setIsAutoScanModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>{t('automaticScanning', 'Automatic Scanning')}</Text>
-                <Text style={styles.modalSubtitle}>{t('selectScanFrequency', 'Select scan frequency')}</Text>
-
-                {AUTO_SCAN_OPTIONS.map((option) => {
-                  const isSelected = (settings.automaticScanning || 'Weekly') === option;
-                  return (
-                    <TouchableOpacity
-                      key={option}
-                      style={[styles.optionRow, isSelected && styles.optionRowSelected]}
-                      onPress={() => handleSelectAutoScan(option)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
-                        {getOptionLabel(option)}
-                      </Text>
-                      {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
 
       {/* Dark Theme Animated Toast Notification */}
       {showToast && (
