@@ -495,11 +495,4 @@ const styles = StyleSheet.create({
     color: '#D1D5DB',
     textAlign: 'center',
   },
-  whitePlaceholderIcon: {
-    width: 20,
-    height: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 4,
-    opacity: 0.9,
-  },
 });

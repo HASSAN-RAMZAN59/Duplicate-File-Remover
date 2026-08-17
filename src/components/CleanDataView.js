@@ -6,7 +6,6 @@ import {
   SafeAreaView,
   TouchableOpacity,
   StatusBar,
-  NativeModules,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import RNFS from 'react-native-fs';
