@@ -34,10 +34,19 @@ export const CleanDataView = ({ cleanedSize = '0 B', onGoBack }) => {
       }
     };
     fetchAvailableSpace();
+
+    // 2-second automatic auto-navigate timer to return to previous flow
+    const autoNavigateTimer = setTimeout(() => {
+      if (isMounted && typeof onGoBack === 'function') {
+        onGoBack();
+      }
+    }, 2000);
+
     return () => {
       isMounted = false;
+      clearTimeout(autoNavigateTimer);
     };
-  }, []);
+  }, [onGoBack]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
