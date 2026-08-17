@@ -36,7 +36,7 @@ export const CleanDataView = ({ cleanedSize = '0 B', onGoBack }) => {
     };
     fetchAvailableSpace();
 
-    // 3-second automatic auto-navigate timer to return to previous flow
+    // 2.5-second automatic auto-navigate timer to return to previous flow
     const autoNavigateTimer = setTimeout(() => {
       if (isMounted && typeof onGoBack === 'function') {
         onGoBack();
