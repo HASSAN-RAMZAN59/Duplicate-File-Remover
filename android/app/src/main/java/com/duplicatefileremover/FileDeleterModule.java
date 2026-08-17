@@ -7,11 +7,9 @@ import android.content.ContentUris;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaScannerConnection;
 import android.media.ThumbnailUtils;
-import android.media.ToneGenerator;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -616,17 +614,6 @@ public class FileDeleterModule extends ReactContextBaseJavaModule {
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
             context.startActivity(chooser);
-            promise.resolve(true);
-        } catch (Exception e) {
-            promise.resolve(false);
-        }
-    }
-
-    @ReactMethod
-    public void playCompletionSound(Promise promise) {
-        try {
-            ToneGenerator toneGen = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
-            toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 150);
             promise.resolve(true);
         } catch (Exception e) {
             promise.resolve(false);
