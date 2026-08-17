@@ -20,6 +20,8 @@ import { deleteBatch } from '../engine/fileDeleter';
 import { formatBytes } from '../engine/hashEngine';
 import { useTranslation } from '../context/LanguageContext';
 import { CustomDialog } from '../components/CustomDialog';
+import { CleanDataView } from '../components/CleanDataView';
+import EmptyStateSvg from '../assets/FILES AND FOLDER grad fill.svg';
 import BackArrowSvg from '../assets/back arrow.svg';
 import ImagesCategorySvg from '../assets/full scan/Overlay.svg';
 import VideosCategorySvg from '../assets/full scan/video.svg';
@@ -203,6 +205,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
   const [currentCategory, setCurrentCategory] = useState('');
   const [scanResults, setScanResults] = useState(null);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [cleanedSuccessInfo, setCleanedSuccessInfo] = useState(null);
   const [dialogConfig, setDialogConfig] = useState({
     visible: false,
     title: '',
@@ -240,6 +243,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
   const handleStartDeepScan = async () => {
     setIsScanning(true);
     setScanProgress(0);
+    setCleanedSuccessInfo(null);
     setCurrentCategory(t('initializing', 'Initializing...'));
 
     let shouldKeepScanningState = false;
@@ -407,26 +411,20 @@ export const DeepScanScreen = ({ navigation, route }) => {
         try {
           const res = await deleteBatch(scanResults.allPreselectedFiles);
 
-          setDialogConfig({
-            visible: true,
-            title: t('cleanSuccessTitle', 'Deep Clean Successful'),
-            message: t('cleanSuccessBody', `Removed ${res.deletedCount} duplicate items and freed ${res.freedFormatted} of storage!`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted),
-            primaryButtonText: 'OK',
-            primaryButtonColor: '#FFFFFF',
-            onPrimaryPress: hideDialog,
-          });
-
-          // Re-run scan to refresh state
-          handleStartDeepScan();
-        } catch (err) {
-          setDialogConfig({
-            visible: true,
-            title: t('cleanupWarning', 'Cleanup Warning'),
-            message: t('someFilesNotRemoved', 'Some files could not be removed.'),
-            primaryButtonText: 'OK',
-            primaryButtonColor: '#FFFFFF',
-            onPrimaryPress: hideDialog,
-          });
+          if (res.deletedCount > 0) {
+            setCleanedSuccessInfo({
+              freedFormatted: res.freedFormatted,
+            });
+          } else {
+            setDialogConfig({
+              visible: true,
+              title: t('cleanupWarning', 'Cleanup Warning'),
+              message: t('someFilesNotRemoved', 'Some files could not be removed.'),
+              primaryButtonText: 'OK',
+              primaryButtonColor: '#FFFFFF',
+              onPrimaryPress: hideDialog,
+            });
+          }
         } finally {
           setIsCleaning(false);
         }
@@ -437,6 +435,15 @@ export const DeepScanScreen = ({ navigation, route }) => {
   const categoryList = scanResults && scanResults.categoryResults
     ? Object.values(scanResults.categoryResults)
     : [];
+
+  if (cleanedSuccessInfo) {
+    return (
+      <CleanDataView
+        cleanedSize={cleanedSuccessInfo.freedFormatted}
+        onGoBack={() => navigation.navigate(ROUTES.HOME)}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -526,7 +533,12 @@ export const DeepScanScreen = ({ navigation, route }) => {
             <Text style={styles.categoriesHeader}>{t('categories', 'Categories')}</Text>
 
             {/* Category Cards List */}
-            {categoryList.length > 0 ? (
+            {scanResults?.totalDuplicateCount === 0 ? (
+              <View style={styles.emptyContainer}>
+                <EmptyStateSvg width={120} height={181} style={{ marginBottom: 20 }} />
+                <Text style={styles.emptyText}>{t('noMoreFilesFound', 'No more files found!')}</Text>
+              </View>
+            ) : categoryList.length > 0 ? (
               categoryList.map((cat) => (
                 <TouchableOpacity
                   key={cat.name}

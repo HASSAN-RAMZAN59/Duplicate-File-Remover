@@ -250,16 +250,15 @@ export const FileDetailScreen = ({ route, navigation }) => {
           const res = await deleteSelectedFiles([file]);
           setIsDeleting(false);
           if (res.deletedCount > 0) {
-            setDialogConfig({
-              visible: true,
-              title: t('cleanedSuccess', 'Cleaned Successfully'),
-              message: 'File deleted successfully.',
-              primaryButtonText: 'OK',
-              primaryButtonColor: '#FFFFFF',
-              onPrimaryPress: () => {
-                hideDialog();
-                navigation.goBack();
+            navigation.navigate({
+              name: ROUTES.DUPLICATE_VIEWER,
+              params: {
+                deletedFilePath: file.path,
+                deletedFileId: file.id,
+                deletedFileSize: file.size,
+                triggerCleanDataView: true,
               },
+              merge: true,
             });
           } else {
             setDialogConfig({

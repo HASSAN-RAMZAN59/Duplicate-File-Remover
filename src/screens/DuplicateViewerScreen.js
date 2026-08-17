@@ -25,6 +25,7 @@ import { calculateImageDuplicates } from '../engine/imageHashEngine';
 import { calculateDuplicates, formatBytes } from '../engine/hashEngine';
 import { deleteBatch } from '../engine/fileDeleter';
 import { CustomDialog } from '../components/CustomDialog';
+import { CleanDataView } from '../components/CleanDataView';
 import { VideoThumbnail } from '../components/VideoThumbnail';
 import { useTranslation } from '../context/LanguageContext';
 import BackArrowSvg from '../assets/back arrow.svg';
@@ -53,6 +54,11 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
   });
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAutoSelected, setIsAutoSelected] = useState(true);
+  const [hasDeletedInSession, setHasDeletedInSession] = useState(false);
+  const [showCleanDataScreen, setShowCleanDataScreen] = useState(false);
+  const [lastClearedFormatted, setLastClearedFormatted] = useState('0 B');
+  const [sessionClearedBytes, setSessionClearedBytes] = useState(0);
+  const [sessionClearedFormatted, setSessionClearedFormatted] = useState('0 B');
   const [dialogConfig, setDialogConfig] = useState({
     visible: false,
     title: '',
@@ -166,6 +172,22 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     if (route.params?.deletedFilePath) {
       const deletedPath = route.params.deletedFilePath;
       const deletedId = route.params.deletedFileId;
+      const deletedSize = Number(route.params?.deletedFileSize || 0);
+
+      setHasDeletedInSession(true);
+      if (deletedSize > 0) {
+        const formattedStr = formatBytes(deletedSize);
+        setLastClearedFormatted(formattedStr);
+        setSessionClearedBytes((prev) => {
+          const next = prev + deletedSize;
+          setSessionClearedFormatted(formatBytes(next));
+          return next;
+        });
+      }
+
+      if (route.params?.triggerCleanDataView) {
+        setShowCleanDataScreen(true);
+      }
 
       setDuplicateGroups((prevGroups) => {
         const updatedGroups = prevGroups
@@ -184,9 +206,9 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
         return updatedGroups;
       });
 
-      navigation.setParams({ deletedFilePath: undefined, deletedFileId: undefined });
+      navigation.setParams({ deletedFilePath: undefined, deletedFileId: undefined, deletedFileSize: undefined, triggerCleanDataView: undefined });
     }
-  }, [route.params?.deletedFilePath, route.params?.deletedFileId, navigation]);
+  }, [route.params?.deletedFilePath, route.params?.deletedFileId, route.params?.deletedFileSize, route.params?.triggerCleanDataView, navigation]);
 
   // 2. Computed Metrics (Selected items count & total bytes selected)
   const selectionSummary = useMemo(() => {
@@ -340,6 +362,14 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
             if (res.deletedCount > 0) {
               const deletedPathsSet = new Set(selectedItems.map((item) => item.path));
 
+              const newTotalBytes = sessionClearedBytes + res.freedBytes;
+              const newTotalFormatted = formatBytes(newTotalBytes);
+              setSessionClearedBytes(newTotalBytes);
+              setSessionClearedFormatted(newTotalFormatted);
+              setLastClearedFormatted(res.freedFormatted || formatBytes(res.freedBytes));
+              setHasDeletedInSession(true);
+              setShowCleanDataScreen(true);
+
               setDuplicateGroups((prevGroups) => {
                 const updatedGroups = prevGroups
                   .map((group) => {
@@ -355,15 +385,6 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
                   .filter((group) => group.files.length > 1);
 
                 return updatedGroups;
-              });
-
-              setDialogConfig({
-                visible: true,
-                title: t('cleanedSuccess', 'Cleaned Successfully'),
-                message: t('cleanedSuccessBody', `Successfully deleted ${res.deletedCount} file(s) and freed ${res.freedFormatted} of storage.`).replace('{count}', res.deletedCount).replace('{size}', res.freedFormatted),
-                primaryButtonText: 'OK',
-                primaryButtonColor: '#FFFFFF',
-                onPrimaryPress: hideDialog,
               });
             } else {
               setDialogConfig({
@@ -550,6 +571,20 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
     );
   }
 
+  if (showCleanDataScreen) {
+    return (
+      <CleanDataView
+        cleanedSize={lastClearedFormatted}
+        onGoBack={() => {
+          setShowCleanDataScreen(false);
+          if (duplicateGroups.length === 0) {
+            handleGoBack();
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" translucent={false} />
@@ -567,12 +602,19 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
       {/* Screen Body */}
       {duplicateGroups.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <EmptyStateSvg width={120} height={181} style={{ marginBottom: 20 }} />
-          <Text style={styles.emptySubtitle}>
-            {t('storageCleanSub', `Your ${displayCategoryName} storage is clean! No duplicate items were detected.`).replace('{category}', displayCategoryName)}
-          </Text>
-        </View>
+        hasDeletedInSession ? (
+          <CleanDataView
+            cleanedSize={sessionClearedFormatted}
+            onGoBack={handleGoBack}
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <EmptyStateSvg width={120} height={181} style={{ marginBottom: 20 }} />
+            <Text style={styles.emptyTitle}>
+              {t('noMoreFilesFound', 'No more files found!')}
+            </Text>
+          </View>
+        )
       ) : (
         <View style={{ flex: 1 }}>
           {/* 2. Review Duplicates Header Section */}
