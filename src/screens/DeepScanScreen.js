@@ -36,8 +36,8 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 /**
  * Circular Progress Meter matching design screenshot
  */
-const CircularProgressMeter = ({ valueString = '0 B' }) => {
-  const parts = valueString.split(' ');
+const CircularProgressMeter = ({ valueString = '0 B', totalBytes = 0, initialMaxBytes = 0 }) => {
+  const parts = (valueString || '0 B').trim().split(' ');
   const valText = parts[0] || '0';
   const unitText = parts[1] || 'B';
 
@@ -45,14 +45,25 @@ const CircularProgressMeter = ({ valueString = '0 B' }) => {
   const circumference = 2 * Math.PI * 45;
 
   useEffect(() => {
-    anim.setValue(0);
+    let targetFill = 0;
+    const numVal = parseFloat(valText);
+    const isZero = totalBytes === 0 || valText === '0' || isNaN(numVal) || numVal === 0 || valueString === '0 B';
+
+    if (isZero) {
+      targetFill = 0;
+    } else if (initialMaxBytes && initialMaxBytes > 0) {
+      targetFill = Math.min(1.0, Math.max(0.15, totalBytes / initialMaxBytes));
+    } else {
+      targetFill = 0.75;
+    }
+
     Animated.timing(anim, {
-      toValue: 0.75,
-      duration: 1500,
+      toValue: targetFill,
+      duration: 1000,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
-  }, []);
+  }, [valueString, totalBytes, initialMaxBytes, valText]);
 
   const strokeDashoffset = anim.interpolate({
     inputRange: [0, 1],
@@ -222,6 +233,7 @@ export const DeepScanScreen = ({ navigation, route }) => {
 
   const selectedCategoryIds = route?.params?.selectedCategoryIds;
   const isCancelledRef = useRef(false);
+  const initialMaxBytesRef = useRef(0);
 
   const getTranslatedCategoryName = (name) => {
     if (!name) return '';
@@ -262,6 +274,9 @@ export const DeepScanScreen = ({ navigation, route }) => {
       }
 
       setScanResults(results);
+      if (results && typeof results.totalReclaimableBytes === 'number') {
+        initialMaxBytesRef.current = results.totalReclaimableBytes;
+      }
 
       // If single category scan, navigate directly to result screen for that category
       if (selectedCategoryIds && selectedCategoryIds.length === 1) {
@@ -507,6 +522,8 @@ export const DeepScanScreen = ({ navigation, route }) => {
                 size={160}
                 strokeWidth={14}
                 valueString={scanResults?.totalReclaimableFormatted || '0 B'}
+                totalBytes={scanResults?.totalReclaimableBytes || 0}
+                initialMaxBytes={initialMaxBytesRef.current}
               />
 
               <Text style={styles.scanCompleteTitle}>{t('scanComplete', 'Scan Complete')}</Text>
