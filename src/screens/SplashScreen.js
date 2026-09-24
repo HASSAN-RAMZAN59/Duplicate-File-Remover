@@ -4,7 +4,7 @@ import { ROUTES } from '../navigation/routes';
 import { storageService } from '../services/storageService';
 import { permissionService } from '../services/permissionService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
-import SplashIcon from '../assets/SplashIcon.svg';
+import NewSplashIcon from '../assets/NewSplashIcon.svg';
 
 export const SplashScreen = ({ navigation }) => {
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -66,7 +66,7 @@ export const SplashScreen = ({ navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor="#141414" translucent={false} />
 
       <View style={styles.iconContainer}>
-        <SplashIcon width={210} height={210} />
+        <NewSplashIcon width={156} height={195} />
       </View>
 
       <View style={styles.textContainer}>
