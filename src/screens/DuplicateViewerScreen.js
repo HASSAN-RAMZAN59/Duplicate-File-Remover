@@ -513,7 +513,7 @@ export const DuplicateViewerScreen = ({ route, navigation }) => {
 
                 {/* Directory Path */}
                 <Text style={styles.filePathText} numberOfLines={1}>
-                  {file.path}
+                  {file.path ? file.path.replace(/\/storage\/emulated\/0\//g, '') : ''}
                 </Text>
 
                 {/* Original Kept Tag */}

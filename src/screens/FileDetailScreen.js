@@ -178,7 +178,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
     }
     Alert.alert(
       'No Compatible App Found',
-      `Could not find a compatible app on your device to open "${file.name || 'this file'}".\n\nLocation: ${file.path}`
+      `Could not find a compatible app on your device to open "${file.name || 'this file'}".\n\nLocation: ${file.path ? file.path.replace(/\/storage\/emulated\/0\//g, '') : ''}`
     );
   };
 
@@ -222,7 +222,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
       } else {
         await RNShareNative.share({
           title: `Share ${file.name || 'File'}`,
-          message: `File: ${file.name}\nPath: ${file.path}`,
+          message: `File: ${file.name}\nPath: ${file.path ? file.path.replace(/\/storage\/emulated\/0\//g, '') : ''}`,
           url: safeUri,
         });
       }
@@ -320,7 +320,7 @@ export const FileDetailScreen = ({ route, navigation }) => {
           </Text>
           <Text style={styles.fileSize}>{formatBytes(file.size || 0)}</Text>
           <Text style={styles.filePath} numberOfLines={3}>
-            {file.path || ''}
+            {file.path ? file.path.replace(/\/storage\/emulated\/0\//g, '') : ''}
           </Text>
 
           {/* Action Row */}
