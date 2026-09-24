@@ -27,3 +27,4 @@ ios/build/
 .DS_Store
 Thumbs.db
 *.log
+android/local.properties

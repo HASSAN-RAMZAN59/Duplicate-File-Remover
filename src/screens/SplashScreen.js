@@ -4,6 +4,7 @@ import { ROUTES } from '../navigation/routes';
 import { storageService } from '../services/storageService';
 import { permissionService } from '../services/permissionService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import SplashIcon from '../assets/SplashIcon.svg';
 
 export const SplashScreen = ({ navigation }) => {
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -64,6 +65,10 @@ export const SplashScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#141414" translucent={false} />
 
+      <View style={styles.iconContainer}>
+        <SplashIcon width={210} height={210} />
+      </View>
+
       <View style={styles.textContainer}>
         <Text style={styles.title}>Remove Duplicates Files</Text>
         <Text style={styles.subtitle}>Check & Delete Duplicates Files</Text>
@@ -85,6 +90,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+  },
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 60,
   },
   textContainer: {
     position: 'absolute',
